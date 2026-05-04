@@ -1,0 +1,1 @@
+export function ResultScreen({result,onAgain,onBack}:{result:'victory'|'defeat';onAgain:()=>void;onBack:()=>void}){return <div className='screen'><h2>{result==='victory'?'승리! 마지막 종이 울릴 때까지 살아남았습니다.':'탈락! 보건실에서 다음 판을 준비하세요.'}</h2><button onClick={onAgain}>Play Again</button><button onClick={onBack}>Back to Character Select</button></div>}
