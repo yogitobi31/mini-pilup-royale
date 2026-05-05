@@ -26,7 +26,7 @@ export function CharacterSelect({ onStart, onBack }: { onStart: (id: CharacterId
 
   const statView = useMemo(
     () => [
-      { label: '속도', value: Math.min(5, Math.max(1, Math.round((selected.speed - 90) / 14))) },
+      { label: '속도', value: Math.min(5, Math.max(1, Math.round((selected.baseMoveSpeed - 90) / 14))) },
       { label: '체력', value: Math.min(5, Math.max(1, Math.round((selected.maxHp - 95) / 12))) },
       { label: '집중력', value: Math.min(5, Math.max(1, Math.round((65 - selected.attackCooldown * 50) / 10))) },
       { label: '특수', value: Math.min(5, Math.max(1, Math.round((12 - selected.skillCooldown) / 1.5))) },
