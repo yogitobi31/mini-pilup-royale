@@ -43,7 +43,7 @@ type MutableGame = {
 function mkState(playerId: CharacterId): GameState {
   const ids = CHARACTERS.map((c) => c.id);
   const order = [playerId, ...ids.filter((i) => i !== playerId)];
-  const fighters: Fighter[] = order.map((id, i) => ({ id: `f${i}`, charId: id, x: 280 + (i % 4) * 500, y: 380 + Math.floor(i / 4) * 620, vx: 0, vy: 0, radius: 22, hp: byId(id).maxHp, alive: true, isPlayer: i === 0, lastAttack: -99, lastSkill: -99, facing: { x: 1, y: 0 }, status: { slowUntil: 0, stunUntil: 0, confuseUntil: 0, defenseUntil: 0, shieldUntil: 0, panicUntil: 0, speedUntil: 0 } }));
+  const fighters: Fighter[] = order.map((id, i) => { const d=byId(id); return ({ id: `f${i}`, charId: id, x: 280 + (i % 4) * 500, y: 380 + Math.floor(i / 4) * 620, vx: 0, vy: 0, radius: d.bodyRadius, hp: d.maxHp*combatConfig.globalHpMultiplier, alive: true, isPlayer: i === 0, lastAttack: -99, lastSkill: -99, lastHitAt:-99, flashUntil:0, fadeUntil:0, facing: { x: 1, y: 0 }, status: { slowUntil: 0, stunUntil: 0, confuseUntil: 0, defenseUntil: 0, shieldUntil: 0, panicUntil: 0, speedUntil: 0 } }); });
   return { fighters, obstacles, safeZone: { x: W / 2, y: H / 2, radius: 920, minRadius: 170, shrinkPerSec: 3.6, tick: 0 }, projectiles: [], traps: [], devices: [], effects: [], time: 0, elapsed: 0, result: 'playing' };
 }
 
@@ -52,7 +52,7 @@ export function GameCanvas({ character, onResult }: { character: CharacterId; on
   const shakeRef = useRef(0);
   const gameRef = useRef<MutableGame | null>(null);
   const [hud, setHud] = useState({ hp: 0, max: 0, alive: 8, skill: 0, t: 0, out: false, name: '', icon: '' });
-  const [debug, setDebug] = useState({ gameStarted: false, activePlayerId: '', activePlayerName: '', x: 0, y: 0, dx: 0, dy: 0, pressedKeys: '', deltaTime: 0, isMoving: false, cameraX: 0, cameraY: 0, updateTick: 0, renderTick: 0, autoMoveActive: false, beforeMoveX: 0, beforeMoveY: 0, afterMoveX: 0, afterMoveY: 0, beforeRenderX: 0, beforeRenderY: 0, attemptedNextX: 0, attemptedNextY: 0, movedDeltaX: 0, movedDeltaY: 0, collisionBlocked: false, clampBlocked: false, resetDetected: false, updateCalled: false });
+  const [debug, setDebug] = useState({ gameStarted: false, activePlayerId: '', activePlayerName: '', x: 0, y: 0, dx: 0, dy: 0, pressedKeys: '', deltaTime: 0, isMoving: false, cameraX: 0, cameraY: 0, updateTick: 0, renderTick: 0, autoMoveActive: false, beforeMoveX: 0, beforeMoveY: 0, afterMoveX: 0, afterMoveY: 0, beforeRenderX: 0, beforeRenderY: 0, attemptedNextX: 0, attemptedNextY: 0, movedDeltaX: 0, movedDeltaY: 0, collisionBlocked: false, clampBlocked: false, resetDetected: false, updateCalled: false, elapsedTime:0,averageHpPercent:0,firstDeathTime:-1,dps:0,separationCount:0,maxAttackersOnTarget:0 });
   const [isTouchDevice, setIsTouchDevice] = useState(false);
   const [dpadPressed, setDpadPressed] = useState({ up: false, down: false, left: false, right: false });
   const [attackPressed, setAttackPressed] = useState(false);
@@ -148,7 +148,7 @@ export function GameCanvas({ character, onResult }: { character: CharacterId; on
         game.input.attackPressed ? 'attack' : '',
         game.input.skillPressed ? 'skill' : '',
       ].filter(Boolean).join(',');
-      setDebug({ gameStarted: true, activePlayerId: game.activePlayerId, activePlayerName: def.nameKo, x: p.x, y: p.y, dx, dy, pressedKeys, deltaTime: dt, isMoving: Math.hypot(p.vx, p.vy) > 0.01, cameraX: game.camera.x, cameraY: game.camera.y, updateTick, renderTick, autoMoveActive: game.state.elapsed < 2, ...game.debugMove });
+      const alive=game.state.fighters.filter((f)=>f.alive); const avgHp=alive.reduce((a,f)=>a+f.hp/(byId(f.charId).maxHp*combatConfig.globalHpMultiplier),0)/(alive.length||1); setDebug({ gameStarted: true, activePlayerId: game.activePlayerId, activePlayerName: def.nameKo, x: p.x, y: p.y, dx, dy, pressedKeys, deltaTime: dt, isMoving: Math.hypot(p.vx, p.vy) > 0.01, cameraX: game.camera.x, cameraY: game.camera.y, updateTick, renderTick, autoMoveActive: game.state.elapsed < 2, elapsedTime:game.state.elapsed, averageHpPercent:avgHp*100, firstDeathTime:(game.state as any).firstDeathTime??-1, dps:(game.state as any).dps??0,separationCount:(game.state as any).separationCount??0,maxAttackersOnTarget:(game.state as any).maxAttackersOnTarget??0, ...game.debugMove });
       if (game.state.result !== 'playing') { onResult(game.state.result); return; }
       raf = requestAnimationFrame(loop);
     };
@@ -198,6 +198,8 @@ export function GameCanvas({ character, onResult }: { character: CharacterId; on
       <div>beforeMove ({debug.beforeMoveX.toFixed(1)}, {debug.beforeMoveY.toFixed(1)}) → afterMove ({debug.afterMoveX.toFixed(1)}, {debug.afterMoveY.toFixed(1)})</div>
       <div>beforeRender ({debug.beforeRenderX.toFixed(1)}, {debug.beforeRenderY.toFixed(1)}) | attempted ({debug.attemptedNextX.toFixed(1)}, {debug.attemptedNextY.toFixed(1)})</div>
       <div>movedDelta ({debug.movedDeltaX.toFixed(2)}, {debug.movedDeltaY.toFixed(2)}) | collisionBlocked: {String(debug.collisionBlocked)} | clampBlocked: {String(debug.clampBlocked)} | resetDetected: {String(debug.resetDetected)}</div>
+      <div>elapsed: {debug.elapsedTime.toFixed(1)}s | avgHp: {debug.averageHpPercent.toFixed(1)}% | firstDeath: {debug.firstDeathTime > 0 ? `${debug.firstDeathTime.toFixed(1)}s` : 'none'}</div>
+      <div>dpsEvents: {debug.dps.toFixed(2)} | separation: {debug.separationCount} | maxAttackersOnTarget: {debug.maxAttackersOnTarget}</div>
     </div>}
     <canvas ref={cv} width={viewW} height={viewH} />
     {isTouchDevice && (
@@ -268,6 +270,7 @@ export function GameCanvas({ character, onResult }: { character: CharacterId; on
 }
 
 const dist = (x: number, y: number, x2: number, y2: number) => Math.hypot(x - x2, y - y2);
+const combatConfig={globalDamageMultiplier:0.75,globalHpMultiplier:1.18,aiAttackAggression:0.78,startingGraceSeconds:1.8,maxMeleeAttackersPerTarget:2,separationStrength:0.55,knockbackStrength:7.5,spawnMinDistance:210};
 const clamp = (v: number, min: number, max: number) => Math.max(min, Math.min(max, v));
 const getActivePlayer = (g: MutableGame) => g.state.fighters.find((f) => f.id === g.activePlayerId) ?? g.state.fighters[0];
 
@@ -299,7 +302,7 @@ function tick(g: MutableGame, dt: number, hit: () => void) {
     } else {
       const t = chooseTarget(s, idx);
       if (dist(f.x, f.y, s.safeZone.x, s.safeZone.y) > s.safeZone.radius + 20) { dx = s.safeZone.x - f.x; dy = s.safeZone.y - f.y; }
-      else if (t) { dx = t.x - f.x; dy = t.y - f.y; if (Math.random() < 0.006) useSkill(s, f); if (dist(f.x, f.y, t.x, t.y) < c.attackRange + 10) attack(s, f, hit); }
+      else if (t) { f.targetId=t.id; const d=dist(f.x,f.y,t.x,t.y); const nx=(t.x-f.x)/(d||1), ny=(t.y-f.y)/(d||1); if (d>c.attackRange*0.95) { dx = t.x - f.x; dy = t.y - f.y; } else if (d < c.preferredCombatDistance*0.85) { dx = -nx; dy = -ny; } else { dx = -ny*0.4; dy = nx*0.4; } if (Math.random() < 0.004) useSkill(s, f); if (d < c.attackRange+6) attack(s, f, hit); }
     }
     if (i.attackPressed && f.id === g.activePlayerId) attack(s, f, hit);
     if (i.skillPressed && f.id === g.activePlayerId) useSkill(s, f);
@@ -350,6 +353,12 @@ function tick(g: MutableGame, dt: number, hit: () => void) {
     }
     if (f.hp <= 0) f.alive = false;
   }
+
+  let separationCount=0;
+  for(let a=0;a<s.fighters.length;a++){for(let b=a+1;b<s.fighters.length;b++){const fa=s.fighters[a],fb=s.fighters[b]; if(!fa.alive||!fb.alive) continue; const dx=fb.x-fa.x,dy=fb.y-fa.y; let d=Math.hypot(dx,dy); const minD=fa.radius+fb.radius; if(d<minD){separationCount++; if(d<0.001){d=0.001;} const nx=dx/d,ny=dy/d; const overlap=(minD-d)*combatConfig.separationStrength; fa.x=clamp(fa.x-nx*overlap*0.5,fa.radius,W-fa.radius); fa.y=clamp(fa.y-ny*overlap*0.5,fa.radius,H-fa.radius); fb.x=clamp(fb.x+nx*overlap*0.5,fb.radius,W-fb.radius); fb.y=clamp(fb.y+ny*overlap*0.5,fb.radius,H-fb.radius);}}}
+  (s as any).separationCount=separationCount;
+  const attackersCount=new Map<string,number>(); s.fighters.forEach(f=>{if(f.alive&&f.targetId){attackersCount.set(f.targetId,(attackersCount.get(f.targetId)||0)+1);}}); (s as any).maxAttackersOnTarget=Math.max(0,...attackersCount.values());
+  const dead=s.fighters.find(f=>!f.alive); if(dead && (s as any).firstDeathTime===undefined){(s as any).firstDeathTime=s.elapsed;}
   s.effects = s.effects.filter((e) => (e.ttl -= dt) > 0);
   const p = getActivePlayer(g);
   g.debugMove.resetDetected = Math.abs(g.debugMove.beforeRenderX - g.debugMove.afterMoveX) > 0.01 || Math.abs(g.debugMove.beforeRenderY - g.debugMove.afterMoveY) > 0.01;
@@ -358,10 +367,27 @@ function tick(g: MutableGame, dt: number, hit: () => void) {
   if (alive.length === 1 && alive[0].id === g.activePlayerId) s.result = 'victory';
 }
 
-function chooseTarget(s: GameState, i: number) { const me = s.fighters[i]; return s.fighters.filter((f) => f.alive && f.id !== me.id).sort((a, b) => dist(me.x, me.y, a.x, a.y) - dist(me.x, me.y, b.x, b.y))[0]; }
-function damage(s: GameState, t: Fighter, d: number) { t.hp -= d; s.effects.push({ x: t.x, y: t.y, r: 18, ttl: .2, kind: 'hit', ownerId: t.id }); }
-function attack(s: GameState, f: Fighter, hit: () => void) { const c = byId(f.charId); if (s.time - f.lastAttack < c.attackCooldown) return; f.lastAttack = s.time; s.effects.push({ x: f.x, y: f.y, r: c.attackRange, ttl: .12, kind: 'attack', ownerId: f.id }); s.fighters.forEach((t) => { if (t.alive && t.id !== f.id && dist(f.x, f.y, t.x, t.y) < c.attackRange + t.radius) { damage(s, t, c.attackPower); const dx = t.x - f.x, dy = t.y - f.y, l = Math.hypot(dx, dy) || 1; t.x += dx / l * 10; t.y += dy / l * 10; hit(); } }); }
-function useSkill(s: GameState, f: Fighter) { const c = byId(f.charId); if (s.time - f.lastSkill < c.skillCooldown) return; f.lastSkill = s.time; const near = s.fighters.filter((t) => t.alive && t.id !== f.id && dist(f.x, f.y, t.x, t.y) < 190); const k = c.id; s.effects.push({ x: f.x, y: f.y, r: 110, ttl: 1.1, kind: k, ownerId: f.id }); if (k === 'juwon') { near.forEach((t) => t.status.slowUntil = s.time + 2.5); } if (k === 'kyungmin') { near.forEach((t) => damage(s, t, 15)); } if (k === 'hyunjun') { near.forEach((t) => t.status.confuseUntil = s.time + 2.2); } if (k === 'chanyoung') { f.hp = Math.min(byId(f.charId).maxHp, f.hp + 22); } if (k === 'hyowon') { near.forEach((t) => { damage(s, t, 10); t.status.stunUntil = s.time + 0.6; }); } if (k === 'dongha') { near.forEach((t) => t.status.slowUntil = s.time + 1.6); } if (k === 'heesun') { const t = near[0]; if (t) damage(s, t, 24); } if (k === 'soeun') { near.forEach((t) => { damage(s, t, 8); t.status.panicUntil = s.time + 2; }); } }
+function chooseTarget(s: GameState, i: number) {
+  const me = s.fighters[i];
+  const alive = s.fighters.filter((f) => f.alive && f.id !== me.id);
+  const attackers = new Map<string, number>();
+  s.fighters.filter((f)=>f.alive && f.targetId).forEach((f)=>attackers.set(f.targetId!, (attackers.get(f.targetId!)||0)+1));
+  return alive.sort((a, b) => {
+    const da = dist(me.x, me.y, a.x, a.y) + (attackers.get(a.id) || 0) * 80;
+    const db = dist(me.x, me.y, b.x, b.y) + (attackers.get(b.id) || 0) * 80;
+    return da - db;
+  })[0];
+}
+function damage(s: GameState, t: Fighter, d: number, src?: Fighter) {
+  const now=s.time;
+  const reduced=now<t.lastHitAt+0.25?0.65:1;
+  t.lastHitAt=now; t.flashUntil=now+0.08;
+  t.hp -= d*combatConfig.globalDamageMultiplier*reduced;
+  s.effects.push({ x: t.x, y: t.y, r: 14, ttl: .22, kind: 'hit', ownerId: t.id });
+  if(src){const dx=t.x-src.x,dy=t.y-src.y,l=Math.hypot(dx,dy)||1; t.x=clamp(t.x+dx/l*combatConfig.knockbackStrength,t.radius,W-t.radius); t.y=clamp(t.y+dy/l*combatConfig.knockbackStrength,t.radius,H-t.radius);} 
+}
+function attack(s: GameState, f: Fighter, hit: () => void) { const c = byId(f.charId); if (s.time < combatConfig.startingGraceSeconds || s.time - f.lastAttack < c.attackCooldown) return; const attackers=s.fighters.filter(x=>x.alive&&x.id!==f.id&&x.targetId===f.targetId&&dist(x.x,x.y,f.x,f.y)<byId(x.charId).attackRange+8).length; if(c.attackRange<60 && attackers>combatConfig.maxMeleeAttackersPerTarget) return; f.lastAttack = s.time; s.effects.push({ x: f.x, y: f.y, r: c.attackRange, ttl: .12, kind: 'attack', ownerId: f.id }); s.fighters.forEach((t) => { if (t.alive && t.id !== f.id && dist(f.x, f.y, t.x, t.y) < c.attackRange + t.radius) { damage(s, t, c.attackPower, f); hit(); } }); }
+function useSkill(s: GameState, f: Fighter) { const c = byId(f.charId); if (s.time < combatConfig.startingGraceSeconds || s.time - f.lastSkill < c.skillCooldown) return; f.lastSkill = s.time; const near = s.fighters.filter((t) => t.alive && t.id !== f.id && dist(f.x, f.y, t.x, t.y) < 190); const k = c.id; s.effects.push({ x: f.x, y: f.y, r: 110, ttl: 1.1, kind: k, ownerId: f.id }); if (k === 'juwon') { near.forEach((t) => t.status.slowUntil = s.time + 2.5); f.status.shieldUntil=s.time+1.8; } if (k === 'kyungmin') { near.forEach((t) => damage(s, t, c.skillPower, f)); } if (k === 'hyunjun') { near.forEach((t) => t.status.confuseUntil = s.time + 2.2); } if (k === 'chanyoung') { f.hp = Math.min(byId(f.charId).maxHp*combatConfig.globalHpMultiplier, f.hp + c.skillPower); } if (k === 'hyowon') { near.forEach((t) => { damage(s, t, c.skillPower*0.8, f); t.status.stunUntil = s.time + 0.45; }); } if (k === 'dongha') { near.forEach((t) => t.status.slowUntil = s.time + 1.6); } if (k === 'heesun') { const t = near.sort((a,b)=>dist(f.x,f.y,a.x,a.y)-dist(f.x,f.y,b.x,b.y))[0]; if (t) damage(s, t, c.skillPower, f); } if (k === 'soeun') { near.forEach((t) => { damage(s, t, c.skillPower*0.7, f); t.status.panicUntil = s.time + 2; }); } }
 function draw(g: MutableGame, can: HTMLCanvasElement, shake: number) { const ctx = can.getContext('2d')!; const s = g.state; const p = getActivePlayer(g); g.camera.x = clamp(p.x - viewW / 2, 0, W - viewW); g.camera.y = clamp(p.y - viewH / 2, 0, H - viewH); const camX = g.camera.x + Math.random() * shake - shake / 2; const camY = g.camera.y + Math.random() * shake - shake / 2; ctx.clearRect(0, 0, viewW, viewH); ctx.fillStyle = '#96d4a6'; ctx.fillRect(0, 0, viewW, viewH);
 obstacles.forEach((o) => { ctx.fillStyle = o.color; ctx.fillRect(o.x - camX, o.y - camY, o.w, o.h); ctx.fillStyle = '#263'; ctx.fillText(o.label, o.x - camX + 8, o.y - camY + 18); }); ctx.strokeStyle = '#fff'; ctx.lineWidth = 2; ctx.strokeRect(980 - camX, 620 - camY, 460, 300); ctx.fillStyle = '#2c8a48'; ctx.fillText('PILUP', 1180 - camX, 780 - camY);
 ctx.fillStyle = 'rgba(130,20,50,.15)'; ctx.fillRect(0, 0, viewW, viewH); ctx.save(); ctx.beginPath(); ctx.arc(s.safeZone.x - camX, s.safeZone.y - camY, s.safeZone.radius, 0, Math.PI * 2); ctx.clip(); ctx.clearRect(0, 0, viewW, viewH); ctx.restore(); ctx.strokeStyle = '#ff5370'; ctx.lineWidth = 3; ctx.beginPath(); ctx.arc(s.safeZone.x - camX, s.safeZone.y - camY, s.safeZone.radius, 0, Math.PI * 2); ctx.stroke();
