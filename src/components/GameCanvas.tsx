@@ -1,9 +1,11 @@
 'use client';
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { byId, CHARACTERS } from '@/game/characters';
 import { CharacterId, Fighter, GameState, InputState, Obstacle } from '@/game/types';
 
 const W = 2400, H = 1600, viewW = 1000, viewH = 620;
+const JOYSTICK_RADIUS = 54;
+const THUMB_RADIUS = 24;
 const obstacles: Obstacle[] = [
   { x: 980, y: 620, w: 460, h: 300, label: '운동장 중앙', color: '#caedc6', solid: false },
   { x: 200, y: 160, w: 300, h: 170, label: '교실 코너', color: '#dce9ff', solid: true },
@@ -24,24 +26,90 @@ function mkState(playerId: CharacterId): GameState { /* unchanged-ish */
 }
 
 export function GameCanvas({ character, onResult }: { character: CharacterId; onResult: (r: 'victory' | 'defeat') => void }) {
-  const cv = useRef<HTMLCanvasElement>(null); const [shake, setShake] = useState(0);
+  const cv = useRef<HTMLCanvasElement>(null);
+  const inputRef = useRef<InputState>({ up: false, down: false, left: false, right: false, moveX: 0, moveY: 0, attack: false, skill: false });
+  const joystickRef = useRef<HTMLDivElement>(null);
+  const joystickPointerId = useRef<number | null>(null);
+  const [shake, setShake] = useState(0);
   const [hud, setHud] = useState({ hp: 0, max: 0, alive: 8, skill: 0, t: 0, out: false, name: '', icon: '' });
-  useEffect(() => { const input: InputState = { up: false, down: false, left: false, right: false, attack: false, skill: false };
-    const down = (e: KeyboardEvent) => { if (['w', 'ArrowUp'].includes(e.key)) input.up = true; if (['s', 'ArrowDown'].includes(e.key)) input.down = true; if (['a', 'ArrowLeft'].includes(e.key)) input.left = true; if (['d', 'ArrowRight'].includes(e.key)) input.right = true; if (e.key === ' ') input.attack = true; if (e.key.toLowerCase() === 'e') input.skill = true; };
-    const up = (e: KeyboardEvent) => { if (['w', 'ArrowUp'].includes(e.key)) input.up = false; if (['s', 'ArrowDown'].includes(e.key)) input.down = false; if (['a', 'ArrowLeft'].includes(e.key)) input.left = false; if (['d', 'ArrowRight'].includes(e.key)) input.right = false; if (e.key === ' ') input.attack = false; if (e.key.toLowerCase() === 'e') input.skill = false; };
+  const [isTouchDevice, setIsTouchDevice] = useState(false);
+  const [thumb, setThumb] = useState({ x: 0, y: 0 });
+  const [attackPressed, setAttackPressed] = useState(false);
+  const [skillPressed, setSkillPressed] = useState(false);
+
+  useEffect(() => {
+    const coarse = window.matchMedia('(pointer: coarse)').matches;
+    setIsTouchDevice(coarse || navigator.maxTouchPoints > 0 || 'ontouchstart' in window);
+  }, []);
+
+  const updateJoystick = (clientX: number, clientY: number) => {
+    const stick = joystickRef.current;
+    if (!stick) return;
+    const rect = stick.getBoundingClientRect();
+    const cx = rect.left + rect.width / 2;
+    const cy = rect.top + rect.height / 2;
+    const dx = clientX - cx;
+    const dy = clientY - cy;
+    const len = Math.hypot(dx, dy);
+    const clamped = Math.min(len, JOYSTICK_RADIUS);
+    const nx = len > 0 ? dx / len : 0;
+    const ny = len > 0 ? dy / len : 0;
+    const tx = nx * clamped;
+    const ty = ny * clamped;
+    setThumb({ x: tx, y: ty });
+    inputRef.current.moveX = nx * (clamped / JOYSTICK_RADIUS);
+    inputRef.current.moveY = ny * (clamped / JOYSTICK_RADIUS);
+  };
+
+  useEffect(() => {
+    const down = (e: KeyboardEvent) => { if (['w', 'ArrowUp'].includes(e.key)) inputRef.current.up = true; if (['s', 'ArrowDown'].includes(e.key)) inputRef.current.down = true; if (['a', 'ArrowLeft'].includes(e.key)) inputRef.current.left = true; if (['d', 'ArrowRight'].includes(e.key)) inputRef.current.right = true; if (e.key === ' ') inputRef.current.attack = true; if (e.key.toLowerCase() === 'e') inputRef.current.skill = true; };
+    const up = (e: KeyboardEvent) => { if (['w', 'ArrowUp'].includes(e.key)) inputRef.current.up = false; if (['s', 'ArrowDown'].includes(e.key)) inputRef.current.down = false; if (['a', 'ArrowLeft'].includes(e.key)) inputRef.current.left = false; if (['d', 'ArrowRight'].includes(e.key)) inputRef.current.right = false; if (e.key === ' ') inputRef.current.attack = false; if (e.key.toLowerCase() === 'e') inputRef.current.skill = false; };
     window.addEventListener('keydown', down); window.addEventListener('keyup', up);
     const state = mkState(character); let raf = 0, last = performance.now();
-    const loop = (now: number) => { const dt = Math.min((now - last) / 1000, 0.033); last = now; state.time += dt; state.elapsed += dt; tick(state, input, dt, () => setShake(4)); draw(state, cv.current!, shake); const p = state.fighters[0], def = byId(p.charId);
+    const loop = (now: number) => { const dt = Math.min((now - last) / 1000, 0.033); last = now; state.time += dt; state.elapsed += dt; tick(state, inputRef.current, dt, () => setShake(4)); draw(state, cv.current!, shake); const p = state.fighters[0], def = byId(p.charId);
       setHud({ hp: Math.max(0, p.hp), max: def.maxHp, alive: state.fighters.filter((f) => f.alive).length, skill: Math.max(0, def.skillCooldown - (state.time - p.lastSkill)), t: state.elapsed, out: dist(p.x, p.y, state.safeZone.x, state.safeZone.y) > state.safeZone.radius, name: def.nameKo, icon: idIcon[def.id] });
       if (state.result !== 'playing') { onResult(state.result); return; } raf = requestAnimationFrame(loop);
-    }; raf = requestAnimationFrame(loop); return () => { cancelAnimationFrame(raf); window.removeEventListener('keydown', down); window.removeEventListener('keyup', up); }; }, [character, onResult, shake]);
-  return <div className='game-wrap'><canvas ref={cv} width={viewW} height={viewH} />
+    }; raf = requestAnimationFrame(loop); return () => { cancelAnimationFrame(raf); window.removeEventListener('keydown', down); window.removeEventListener('keyup', up); };
+  }, [character, onResult, shake]);
+
+  const skillCooldownActive = hud.skill > 0.01;
+
+  return <div className='game-wrap gameplay-touch-lock'><canvas ref={cv} width={viewW} height={viewH} />
     <div className='hud-main'><div className='player-panel'>{hud.icon} <b>{hud.name}</b> <span>HP {hud.hp.toFixed(0)}/{hud.max}</span><div className='hpbar'><i style={{ width: `${(hud.hp / hud.max) * 100}%` }} /></div><small>기본공격 SPACE | 스킬 E ({hud.skill.toFixed(1)}s)</small></div>
-    <div className='top-panel'><b>미니필업 운동장</b><span>생존 {hud.alive}</span><span>{hud.t.toFixed(0)}s</span>{hud.out && <span className='warn'>⚠ 안전지대 밖</span>}</div></div></div>;
+    <div className='top-panel'><b>미니필업 운동장</b><span>생존 {hud.alive}</span><span>{hud.t.toFixed(0)}s</span>{hud.out && <span className='warn'>⚠ 안전지대 밖</span>}</div></div>
+    {isTouchDevice && (
+      <div className='mobile-controls'>
+        <div
+          ref={joystickRef}
+          className='joystick'
+          onPointerDown={(e) => { e.preventDefault(); joystickPointerId.current = e.pointerId; updateJoystick(e.clientX, e.clientY); }}
+          onPointerMove={(e) => { if (joystickPointerId.current !== e.pointerId) return; e.preventDefault(); updateJoystick(e.clientX, e.clientY); }}
+          onPointerUp={(e) => { if (joystickPointerId.current !== e.pointerId) return; e.preventDefault(); joystickPointerId.current = null; inputRef.current.moveX = 0; inputRef.current.moveY = 0; setThumb({ x: 0, y: 0 }); }}
+          onPointerCancel={(e) => { if (joystickPointerId.current !== e.pointerId) return; e.preventDefault(); joystickPointerId.current = null; inputRef.current.moveX = 0; inputRef.current.moveY = 0; setThumb({ x: 0, y: 0 }); }}
+        >
+          <span className='joystick-thumb' style={{ transform: `translate(${thumb.x}px, ${thumb.y}px)` }} />
+        </div>
+        <div className='mobile-buttons'>
+          <button
+            className={`touch-btn skill ${skillPressed ? 'pressed' : ''} ${skillCooldownActive ? 'disabled' : ''}`}
+            onPointerDown={(e) => { e.preventDefault(); setSkillPressed(true); inputRef.current.skill = true; }}
+            onPointerUp={(e) => { e.preventDefault(); setSkillPressed(false); inputRef.current.skill = false; }}
+            onPointerCancel={() => { setSkillPressed(false); inputRef.current.skill = false; }}
+          >스킬{skillCooldownActive ? ` ${hud.skill.toFixed(1)}` : ''}</button>
+          <button
+            className={`touch-btn attack ${attackPressed ? 'pressed' : ''}`}
+            onPointerDown={(e) => { e.preventDefault(); setAttackPressed(true); inputRef.current.attack = true; }}
+            onPointerUp={(e) => { e.preventDefault(); setAttackPressed(false); inputRef.current.attack = false; }}
+            onPointerCancel={() => { setAttackPressed(false); inputRef.current.attack = false; }}
+          >공격</button>
+        </div>
+      </div>
+    )}
+  </div>;
 }
 const dist = (x:number,y:number,x2:number,y2:number)=>Math.hypot(x-x2,y-y2);
 function tick(s: GameState, i: InputState, dt: number, hit: ()=>void){s.safeZone.radius=Math.max(s.safeZone.minRadius,s.safeZone.radius-s.safeZone.shrinkPerSec*dt);s.safeZone.tick+=dt;if(s.safeZone.tick>1){s.safeZone.tick=0;s.fighters.filter(f=>f.alive&&dist(f.x,f.y,s.safeZone.x,s.safeZone.y)>s.safeZone.radius).forEach(f=>f.hp-=6)}
-for(let idx=0;idx<s.fighters.length;idx++){const f=s.fighters[idx];if(!f.alive)continue;const c=byId(f.charId);let dx=0,dy=0;if(f.status.stunUntil>s.time){} else if(f.isPlayer){dx=(i.right?1:0)-(i.left?1:0);dy=(i.down?1:0)-(i.up?1:0);} else {const t=chooseTarget(s,idx);if(dist(f.x,f.y,s.safeZone.x,s.safeZone.y)>s.safeZone.radius+20){dx=s.safeZone.x-f.x;dy=s.safeZone.y-f.y;} else if(t){dx=t.x-f.x;dy=t.y-f.y;if(Math.random()<0.006)useSkill(s,f);if(dist(f.x,f.y,t.x,t.y)<c.attackRange+10)attack(s,f,hit);} }
+for(let idx=0;idx<s.fighters.length;idx++){const f=s.fighters[idx];if(!f.alive)continue;const c=byId(f.charId);let dx=0,dy=0;if(f.status.stunUntil>s.time){} else if(f.isPlayer){const kx=(i.right?1:0)-(i.left?1:0);const ky=(i.down?1:0)-(i.up?1:0);dx=Math.abs(i.moveX)>0.01?i.moveX:kx;dy=Math.abs(i.moveY)>0.01?i.moveY:ky;} else {const t=chooseTarget(s,idx);if(dist(f.x,f.y,s.safeZone.x,s.safeZone.y)>s.safeZone.radius+20){dx=s.safeZone.x-f.x;dy=s.safeZone.y-f.y;} else if(t){dx=t.x-f.x;dy=t.y-f.y;if(Math.random()<0.006)useSkill(s,f);if(dist(f.x,f.y,t.x,t.y)<c.attackRange+10)attack(s,f,hit);} }
 if(i.attack&&f.isPlayer)attack(s,f,hit);if(i.skill&&f.isPlayer)useSkill(s,f);const l=Math.hypot(dx,dy)||1;let sp=c.speed;if(f.status.slowUntil>s.time)sp*=.62;if(f.status.speedUntil>s.time)sp*=1.3;f.vx=dx/l*sp;f.vy=dy/l*sp;f.x+=f.vx*dt;f.y+=f.vy*dt;obstacles.forEach(o=>{if(o.solid&&f.x>o.x-f.radius&&f.x<o.x+o.w+f.radius&&f.y>o.y-f.radius&&f.y<o.y+o.h+f.radius){f.x-=f.vx*dt;f.y-=f.vy*dt;}});if(f.hp<=0)f.alive=false;}
 s.effects=s.effects.filter(e=>(e.ttl-=dt)>0);const p=s.fighters[0];if(!p.alive)s.result='defeat';const alive=s.fighters.filter(f=>f.alive);if(alive.length===1&&alive[0].isPlayer)s.result='victory';}
 function chooseTarget(s:GameState,i:number){const me=s.fighters[i];return s.fighters.filter(f=>f.alive&&f.id!==me.id).sort((a,b)=>dist(me.x,me.y,a.x,a.y)-dist(me.x,me.y,b.x,b.y))[0]}

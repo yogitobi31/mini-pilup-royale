@@ -8,3 +8,14 @@
 .game-wrap{max-width:1080px;margin:12px auto}.hud-main{display:flex;justify-content:space-between;gap:10px}.player-panel,.top-panel{background:rgba(12,18,39,.78);color:#fff;padding:10px 14px;border-radius:12px}.player-panel{flex:1;text-align:left}.top-panel{display:flex;gap:12px;align-items:center}.warn{color:#ffd25c}.hpbar{height:8px;background:#4a4f65;border-radius:99px;overflow:hidden;margin:6px 0}.hpbar i{display:block;height:100%;background:linear-gradient(90deg,#71e87c,#3dcf62)}
 canvas{display:block;margin:12px auto;border:3px solid #8ca0ff;border-radius:12px;background:white;max-width:100%;height:auto}
 @media (max-width:920px){.character-grid{grid-template-columns:repeat(2,minmax(160px,1fr))}.menu-title{font-size:32px}.hud-main{flex-direction:column}}
+
+.gameplay-touch-lock{position:relative;touch-action:none;-webkit-user-select:none;user-select:none}
+.mobile-controls{position:absolute;inset:0;pointer-events:none}
+.joystick{position:absolute;left:18px;bottom:18px;width:128px;height:128px;border-radius:50%;border:2px solid rgba(255,255,255,.55);background:rgba(9,18,36,.2);display:flex;align-items:center;justify-content:center;pointer-events:auto;touch-action:none}
+.joystick-thumb{width:48px;height:48px;border-radius:50%;background:rgba(255,255,255,.85);box-shadow:0 2px 10px rgba(0,0,0,.2)}
+.mobile-buttons{position:absolute;right:18px;bottom:18px;display:flex;flex-direction:column;gap:10px;align-items:flex-end;pointer-events:auto}
+.touch-btn{width:110px;height:64px;border-radius:40px;border:2px solid rgba(255,255,255,.45);background:rgba(24,33,66,.82);color:#fff;font-size:24px;font-weight:800;touch-action:none}
+.touch-btn.skill{width:96px;height:58px;font-size:20px}
+.touch-btn.pressed{transform:scale(.96);filter:brightness(1.2)}
+.touch-btn.disabled{opacity:.5}
+@media (min-width: 921px){.mobile-controls{display:none}}
