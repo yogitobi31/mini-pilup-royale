@@ -6,21 +6,30 @@ import { CharacterId, Fighter, GameState, InputState, Obstacle } from '@/game/ty
 
 const W = 2400, H = 1600, viewW = 1000, viewH = 620;
 const MAX_FLOATING_TEXT = 42;
-const obstacles: Obstacle[] = [
-  { x: 360, y: 250, w: 300, h: 20, label: '복도 벽', color: '#38445d', solid: true },
-  { x: 360, y: 250, w: 20, h: 320, label: '복도 벽', color: '#38445d', solid: true },
-  { x: 420, y: 320, w: 120, h: 70, label: '사물함', color: '#4f5f7f', solid: true },
-  { x: 580, y: 330, w: 90, h: 50, label: '의자', color: '#8c745f', solid: true },
-  { x: 960, y: 520, w: 480, h: 320, label: '중앙 교실', color: '#25354b', solid: false },
-  { x: 1020, y: 560, w: 80, h: 42, label: '책상', color: '#7f6952', solid: true },
-  { x: 1140, y: 560, w: 80, h: 42, label: '책상', color: '#7f6952', solid: true },
-  { x: 1260, y: 560, w: 80, h: 42, label: '책상', color: '#7f6952', solid: true },
-  { x: 1700, y: 280, w: 280, h: 180, label: '휴게 구역', color: '#2d3f52', solid: false },
-  { x: 1780, y: 340, w: 92, h: 52, label: '벤치', color: '#8c745f', solid: true },
-  { x: 1700, y: 1060, w: 280, h: 260, label: '학원 복도', color: '#2d3a4f', solid: false },
-  { x: 1780, y: 1140, w: 120, h: 54, label: '칠판', color: '#31503d', solid: true },
-  { x: 760, y: 1120, w: 120, h: 120, label: '기둥', color: '#4a5566', solid: true },
-  { x: 1260, y: 1120, w: 140, h: 90, label: '책상', color: '#7f6952', solid: true },
+type ArenaZone = { id: string; x: number; y: number; w: number; h: number; label: string; tone: string };
+type ArenaObstacle = Obstacle & { id: string; type: 'wall' | 'desk' | 'locker' | 'pillar' | 'bench' | 'board' };
+const arenaZones: ArenaZone[] = [
+  { id: 'hallway-north', x: 260, y: 160, w: 1880, h: 280, label: '북측 복도', tone: '#273956' },
+  { id: 'classroom-center', x: 860, y: 470, w: 680, h: 470, label: '중앙 교실', tone: '#1f3046' },
+  { id: 'hallway-south', x: 220, y: 1030, w: 1960, h: 360, label: '남측 복도', tone: '#293850' },
+  { id: 'safe-core', x: 980, y: 600, w: 380, h: 220, label: '안전지대 코어', tone: '#244661' },
+];
+const arenaDecorations = [
+  { x: 300, y: 300, w: 1800, h: 4, color: 'rgba(180,209,255,0.08)' },
+  { x: 300, y: 1120, w: 1800, h: 4, color: 'rgba(180,209,255,0.08)' },
+  { x: 1050, y: 560, w: 300, h: 2, color: 'rgba(255,255,255,0.11)' },
+];
+const obstacles: ArenaObstacle[] = [
+  { id: 'wall-north', x: 330, y: 240, w: 520, h: 30, label: '복도 벽', color: '#3f4f68', solid: true, type: 'wall' },
+  { id: 'wall-west', x: 330, y: 240, w: 30, h: 350, label: '복도 벽', color: '#3f4f68', solid: true, type: 'wall' },
+  { id: 'locker-a', x: 430, y: 325, w: 130, h: 72, label: '사물함', color: '#576a88', solid: true, type: 'locker' },
+  { id: 'desk-a', x: 1030, y: 575, w: 95, h: 48, label: '책상', color: '#8a7056', solid: true, type: 'desk' },
+  { id: 'desk-b', x: 1165, y: 575, w: 95, h: 48, label: '책상', color: '#8a7056', solid: true, type: 'desk' },
+  { id: 'desk-c', x: 1300, y: 575, w: 95, h: 48, label: '책상', color: '#8a7056', solid: true, type: 'desk' },
+  { id: 'bench-a', x: 1770, y: 350, w: 112, h: 56, label: '벤치', color: '#856a54', solid: true, type: 'bench' },
+  { id: 'board-a', x: 1760, y: 1145, w: 132, h: 58, label: '칠판', color: '#2e5a43', solid: true, type: 'board' },
+  { id: 'pillar-a', x: 760, y: 1115, w: 124, h: 124, label: '기둥', color: '#4e5a6c', solid: true, type: 'pillar' },
+  { id: 'desk-d', x: 1260, y: 1110, w: 150, h: 98, label: '책상', color: '#8a7056', solid: true, type: 'desk' },
 ];
 const idIcon: Record<CharacterId, string> = { juwon: '🔔', kyungmin: '🎵', hyunjun: '❓', chanyoung: '🙂', hyowon: '🪤', dongha: '⚙️', heesun: '✏️', soeun: '🐞' };
 
@@ -41,6 +50,10 @@ type MutableGame = {
     movedDeltaX: number;
     movedDeltaY: number;
     collisionBlocked: boolean;
+    collisionObstacleId: string;
+    lastBlockedReason: string;
+    blockedX: boolean;
+    blockedY: boolean;
     clampBlocked: boolean;
     resetDetected: boolean;
     updateCalled: boolean;
@@ -59,9 +72,8 @@ export function GameCanvas({ character, onResult }: { character: CharacterId; on
   const shakeRef = useRef(0);
   const gameRef = useRef<MutableGame | null>(null);
   const [hud, setHud] = useState({ hp: 0, max: 0, alive: 8, skill: 0, t: 0, out: false, name: '', icon: '' });
-  const [debug, setDebug] = useState({ gameStarted: false, activePlayerId: '', activePlayerName: '', x: 0, y: 0, dx: 0, dy: 0, pressedKeys: '', deltaTime: 0, isMoving: false, cameraX: 0, cameraY: 0, updateTick: 0, renderTick: 0, autoMoveActive: false, beforeMoveX: 0, beforeMoveY: 0, afterMoveX: 0, afterMoveY: 0, beforeRenderX: 0, beforeRenderY: 0, attemptedNextX: 0, attemptedNextY: 0, movedDeltaX: 0, movedDeltaY: 0, collisionBlocked: false, clampBlocked: false, resetDetected: false, updateCalled: false, elapsedTime:0,averageHpPercent:0,firstDeathTime:-1,dps:0,separationCount:0,maxAttackersOnTarget:0 });
+  const [debug, setDebug] = useState({ gameStarted: false, activePlayerId: '', activePlayerName: '', x: 0, y: 0, dx: 0, dy: 0, pressedKeys: '', deltaTime: 0, isMoving: false, cameraX: 0, cameraY: 0, updateTick: 0, renderTick: 0, autoMoveActive: false, beforeMoveX: 0, beforeMoveY: 0, afterMoveX: 0, afterMoveY: 0, beforeRenderX: 0, beforeRenderY: 0, attemptedNextX: 0, attemptedNextY: 0, movedDeltaX: 0, movedDeltaY: 0, collisionBlocked: false, collisionObstacleId: '', lastBlockedReason: '', blockedX: false, blockedY: false, clampBlocked: false, resetDetected: false, updateCalled: false, elapsedTime:0,averageHpPercent:0,firstDeathTime:-1,dps:0,separationCount:0,maxAttackersOnTarget:0 });
   const [isTouchDevice, setIsTouchDevice] = useState(false);
-  const [dpadPressed, setDpadPressed] = useState({ up: false, down: false, left: false, right: false });
   const [attackPressed, setAttackPressed] = useState(false);
   const [skillPressed, setSkillPressed] = useState(false);
   const joystickPointerIdRef = useRef<number | null>(null);
@@ -92,10 +104,6 @@ export function GameCanvas({ character, onResult }: { character: CharacterId; on
     return () => media.removeEventListener('change', sync);
   }, [isTouchDevice]);
 
-  const setDpadMovement = (direction: 'up' | 'down' | 'left' | 'right', pressed: boolean) => {
-    setKeyboardMovement(direction, pressed);
-    setDpadPressed((current) => ({ ...current, [direction]: pressed }));
-  };
 
   useEffect(() => {
     resetInputState();
@@ -106,7 +114,7 @@ export function GameCanvas({ character, onResult }: { character: CharacterId; on
       activePlayerId: activePlayer?.id ?? state.fighters[0].id,
       camera: { x: 0, y: 0 },
       input: inputState,
-      debugMove: { beforeMoveX: 0, beforeMoveY: 0, attemptedNextX: 0, attemptedNextY: 0, afterMoveX: 0, afterMoveY: 0, beforeRenderX: 0, beforeRenderY: 0, movedDeltaX: 0, movedDeltaY: 0, collisionBlocked: false, clampBlocked: false, resetDetected: false, updateCalled: false },
+      debugMove: { beforeMoveX: 0, beforeMoveY: 0, attemptedNextX: 0, attemptedNextY: 0, afterMoveX: 0, afterMoveY: 0, beforeRenderX: 0, beforeRenderY: 0, movedDeltaX: 0, movedDeltaY: 0, collisionBlocked: false, collisionObstacleId: '', lastBlockedReason: '', blockedX: false, blockedY: false, clampBlocked: false, resetDetected: false, updateCalled: false },
     };
 
     const applyKey = (e: KeyboardEvent, pressed: boolean) => {
@@ -204,30 +212,14 @@ export function GameCanvas({ character, onResult }: { character: CharacterId; on
       <div>update/render ticks: {debug.updateTick}/{debug.renderTick} | updateCalled: {String(debug.updateCalled)}</div>
       <div>beforeMove ({debug.beforeMoveX.toFixed(1)}, {debug.beforeMoveY.toFixed(1)}) → afterMove ({debug.afterMoveX.toFixed(1)}, {debug.afterMoveY.toFixed(1)})</div>
       <div>beforeRender ({debug.beforeRenderX.toFixed(1)}, {debug.beforeRenderY.toFixed(1)}) | attempted ({debug.attemptedNextX.toFixed(1)}, {debug.attemptedNextY.toFixed(1)})</div>
-      <div>movedDelta ({debug.movedDeltaX.toFixed(2)}, {debug.movedDeltaY.toFixed(2)}) | collisionBlocked: {String(debug.collisionBlocked)} | clampBlocked: {String(debug.clampBlocked)} | resetDetected: {String(debug.resetDetected)}</div>
+      <div>movedDelta ({debug.movedDeltaX.toFixed(2)}, {debug.movedDeltaY.toFixed(2)}) | collisionBlocked: {String(debug.collisionBlocked)} | obstacleId: {debug.collisionObstacleId || 'none'}</div>
+      <div>lastBlockedReason: {debug.lastBlockedReason || 'none'} | blockedX: {String(debug.blockedX)} | blockedY: {String(debug.blockedY)} | clampBlocked: {String(debug.clampBlocked)} | resetDetected: {String(debug.resetDetected)}</div>
       <div>elapsed: {debug.elapsedTime.toFixed(1)}s | avgHp: {debug.averageHpPercent.toFixed(1)}% | firstDeath: {debug.firstDeathTime > 0 ? `${debug.firstDeathTime.toFixed(1)}s` : 'none'}</div>
       <div>dpsEvents: {debug.dps.toFixed(2)} | separation: {debug.separationCount} | maxAttackersOnTarget: {debug.maxAttackersOnTarget}</div>
     </div>}
     <canvas ref={cv} width={viewW} height={viewH} />
     {isTouchDevice && (
       <div className='mobile-controls'>
-        <div className='mobile-dpad' aria-label='이동 버튼'>
-          {(['up', 'left', 'right', 'down'] as const).map((direction) => (
-            <button
-              key={direction}
-              type='button'
-              className={`dpad-btn ${direction} ${dpadPressed[direction] ? 'pressed' : ''}`}
-              aria-label={`${direction} 이동`}
-              onPointerDown={(e) => { e.preventDefault(); e.currentTarget.setPointerCapture(e.pointerId); setDpadMovement(direction, true); }}
-              onPointerUp={(e) => { e.preventDefault(); setDpadMovement(direction, false); }}
-              onPointerCancel={() => setDpadMovement(direction, false)}
-              onLostPointerCapture={() => setDpadMovement(direction, false)}
-              onContextMenu={(e) => e.preventDefault()}
-            >
-              {direction === 'up' ? '▲' : direction === 'down' ? '▼' : direction === 'left' ? '◀' : '▶'}
-            </button>
-          ))}
-        </div>
         <div
           className='mobile-joystick'
           onPointerDown={(e) => {
@@ -325,15 +317,27 @@ function tick(g: MutableGame, dt: number, hit: () => void) {
     let nextX = f.x + f.vx * dt;
     let nextY = f.y + f.vy * dt;
     let collisionBlocked = false;
+    let blockedX = false;
+    let blockedY = false;
+    let blockedObstacleId = '';
     let clampBlocked = false;
 
     if (!debugDisableCollision) {
       for (const o of obstacles) {
-        if (o.solid && nextX > o.x - f.radius && nextX < o.x + o.w + f.radius && nextY > o.y - f.radius && nextY < o.y + o.h + f.radius) {
+        if (!o.solid) continue;
+        const hitX = nextX > o.x - f.radius && nextX < o.x + o.w + f.radius && beforeMoveY > o.y - f.radius && beforeMoveY < o.y + o.h + f.radius;
+        if (hitX) {
+          blockedX = true;
           collisionBlocked = true;
+          blockedObstacleId = blockedObstacleId || o.id;
           nextX = beforeMoveX;
+        }
+        const hitY = beforeMoveX > o.x - f.radius && beforeMoveX < o.x + o.w + f.radius && nextY > o.y - f.radius && nextY < o.y + o.h + f.radius;
+        if (hitY) {
+          blockedY = true;
+          collisionBlocked = true;
+          blockedObstacleId = blockedObstacleId || o.id;
           nextY = beforeMoveY;
-          break;
         }
       }
     }
@@ -355,6 +359,10 @@ function tick(g: MutableGame, dt: number, hit: () => void) {
       g.debugMove.movedDeltaX = f.x - beforeMoveX;
       g.debugMove.movedDeltaY = f.y - beforeMoveY;
       g.debugMove.collisionBlocked = collisionBlocked;
+      g.debugMove.collisionObstacleId = blockedObstacleId;
+      g.debugMove.blockedX = blockedX;
+      g.debugMove.blockedY = blockedY;
+      g.debugMove.lastBlockedReason = collisionBlocked ? `obstacle:${blockedObstacleId || 'unknown'}` : (clampBlocked ? 'world-boundary' : 'none');
       g.debugMove.clampBlocked = clampBlocked;
       g.debugMove.resetDetected = false;
     }
@@ -400,8 +408,10 @@ function attack(s: GameState, f: Fighter, hit: () => void) { const c = byId(f.ch
 function useSkill(s: GameState, f: Fighter) { const c = byId(f.charId); if (s.time < combatConfig.startingGraceSeconds || s.time - f.lastSkill < c.skillCooldown) return; f.lastSkill = s.time; const near = s.fighters.filter((t) => t.alive && t.id !== f.id && dist(f.x, f.y, t.x, t.y) < 190); const k = c.id; s.effects.push({ x: f.x, y: f.y, r: 110, ttl: 1.1, kind: k, ownerId: f.id }); if (k === 'juwon') { near.forEach((t) => t.status.slowUntil = s.time + 2.5); f.status.shieldUntil=s.time+1.8; } if (k === 'kyungmin') { near.forEach((t) => damage(s, t, c.skillPower, f)); } if (k === 'hyunjun') { near.forEach((t) => t.status.confuseUntil = s.time + 2.2); } if (k === 'chanyoung') { f.hp = Math.min(byId(f.charId).maxHp*combatConfig.globalHpMultiplier, f.hp + c.skillPower); } if (k === 'hyowon') { near.forEach((t) => { damage(s, t, c.skillPower*0.8, f); t.status.stunUntil = s.time + 0.45; }); } if (k === 'dongha') { near.forEach((t) => t.status.slowUntil = s.time + 1.6); } if (k === 'heesun') { const t = near.sort((a,b)=>dist(f.x,f.y,a.x,a.y)-dist(f.x,f.y,b.x,b.y))[0]; if (t) damage(s, t, c.skillPower, f); } if (k === 'soeun') { near.forEach((t) => { damage(s, t, c.skillPower*0.7, f); t.status.panicUntil = s.time + 2; }); } }
 function draw(g: MutableGame, can: HTMLCanvasElement, shake: number) { const ctx = can.getContext('2d')!; const s = g.state; const p = getActivePlayer(g); const targetCamX = clamp(p.x - viewW / 2, 0, W - viewW); const targetCamY = clamp(p.y - viewH / 2, 0, H - viewH); g.camera.x += (targetCamX-g.camera.x)*0.14; g.camera.y += (targetCamY-g.camera.y)*0.14; const camX = g.camera.x + Math.random() * shake - shake / 2; const camY = g.camera.y + Math.random() * shake - shake / 2; ctx.clearRect(0, 0, viewW, viewH); const grad=ctx.createLinearGradient(0,0,0,viewH); grad.addColorStop(0,'#1a2436'); grad.addColorStop(1,'#141c2d'); ctx.fillStyle = grad; ctx.fillRect(0,0,viewW,viewH);
 for(let gx=-Math.floor(camX%80);gx<viewW;gx+=80){ctx.strokeStyle='rgba(255,255,255,.04)';ctx.beginPath();ctx.moveTo(gx,0);ctx.lineTo(gx,viewH);ctx.stroke();}
-obstacles.forEach((o) => { const ox=o.x-camX, oy=o.y-camY; ctx.fillStyle = o.color; ctx.fillRect(ox, oy, o.w, o.h); ctx.strokeStyle='rgba(0,0,0,.35)'; ctx.strokeRect(ox,oy,o.w,o.h); if(!o.solid){ctx.fillStyle='rgba(255,255,255,.07)';ctx.fillText(o.label,ox+8,oy+18);} });
+arenaZones.forEach((z)=>{const zx=z.x-camX,zy=z.y-camY;ctx.fillStyle=z.tone;ctx.fillRect(zx,zy,z.w,z.h);ctx.strokeStyle='rgba(255,255,255,.08)';ctx.strokeRect(zx,zy,z.w,z.h);ctx.fillStyle='rgba(223,237,255,.35)';ctx.fillText(z.label,zx+10,zy+20);});
+arenaDecorations.forEach((d)=>{ctx.fillStyle=d.color;ctx.fillRect(d.x-camX,d.y-camY,d.w,d.h);});
+obstacles.forEach((o) => { const ox=o.x-camX, oy=o.y-camY; ctx.fillStyle = o.color; ctx.fillRect(ox, oy, o.w, o.h); ctx.fillStyle='rgba(255,255,255,.08)';ctx.fillRect(ox+4,oy+4,o.w-8,Math.min(10,o.h*0.25)); ctx.strokeStyle='rgba(0,0,0,.42)'; ctx.strokeRect(ox,oy,o.w,o.h); ctx.shadowColor='rgba(0,0,0,.32)';ctx.shadowBlur=8;ctx.strokeRect(ox+1,oy+1,o.w-2,o.h-2);ctx.shadowBlur=0; });
 ctx.fillStyle = 'rgba(20,30,55,.38)'; ctx.fillRect(0, 0, viewW, viewH); ctx.save(); ctx.beginPath(); ctx.arc(s.safeZone.x - camX, s.safeZone.y - camY, s.safeZone.radius, 0, Math.PI * 2); ctx.clip(); ctx.clearRect(0, 0, viewW, viewH); ctx.restore(); ctx.strokeStyle = '#7ec8ff'; ctx.shadowColor='#5bb4ff'; ctx.shadowBlur=14; ctx.lineWidth = 3; ctx.beginPath(); ctx.arc(s.safeZone.x - camX, s.safeZone.y - camY, s.safeZone.radius, 0, Math.PI * 2); ctx.stroke(); ctx.shadowBlur=0;
 for (const e of s.effects as any[]) { if(e.kind==='dmg'){ctx.globalAlpha=Math.max(0,e.ttl/0.65); ctx.fillStyle=e.crit?'#ffd55c':'#ffffff'; ctx.font=e.crit?'bold 17px Inter':'bold 14px Inter'; ctx.fillText(e.text,e.x-camX,e.y-camY); ctx.globalAlpha=1; continue;} ctx.strokeStyle = e.kind === 'hit' ? '#fff' : e.kind === 'death' ? '#ffd0c0' : '#73b8ff'; ctx.globalAlpha=Math.max(0,e.ttl); ctx.beginPath(); ctx.arc(e.x - camX, e.y - camY, e.r, 0, Math.PI * 2); ctx.stroke(); ctx.globalAlpha=1; }
 for (const f of s.fighters) { if (!f.alive) continue; const c = byId(f.charId); const hpRate=Math.max(0,f.hp/(byId(f.charId).maxHp*combatConfig.globalHpMultiplier)); if(s.time<f.flashUntil){ctx.fillStyle='rgba(255,140,140,.95)';}else{ctx.fillStyle = c.fallbackColor;} ctx.beginPath(); ctx.arc(f.x - camX, f.y - camY, f.radius, 0, Math.PI * 2); ctx.fill(); ctx.fillStyle = '#111'; ctx.fillText(idIcon[c.id], f.x - camX - 7, f.y - camY + 4); ctx.fillStyle='#dbe5ff'; ctx.fillText(c.nameKo, f.x - camX - 20, f.y - camY - f.radius - 10); ctx.fillStyle = '#1e2230'; ctx.fillRect(f.x - camX - 24, f.y - camY + f.radius + 6, 48, 6); ctx.fillStyle='#5e667d'; ctx.fillRect(f.x - camX - 24, f.y - camY + f.radius + 6, 48*Math.min(1,(f as any).trailHpRate??hpRate),6); (f as any).trailHpRate=((f as any).trailHpRate??hpRate)+(hpRate-((f as any).trailHpRate??hpRate))*0.15; ctx.fillStyle = hpRate<0.3?'#ff5d5d':'#59de72'; ctx.fillRect(f.x - camX - 24, f.y - camY + f.radius + 6, 48 * hpRate, 6); }
-ctx.beginPath(); ctx.strokeStyle = '#ffcf5e'; ctx.lineWidth = 2; ctx.arc(p.x - camX, p.y - camY, p.radius+4, 0, Math.PI * 2); ctx.stroke(); }
+ctx.beginPath(); ctx.strokeStyle = '#ffcf5e'; ctx.lineWidth = 2; ctx.arc(p.x - camX, p.y - camY, p.radius+4, 0, Math.PI * 2); ctx.stroke(); const debugMode = typeof window !== 'undefined' && new URLSearchParams(window.location.search).get('debug') === '1'; if (debugMode) {ctx.strokeStyle='rgba(255,80,80,.75)';ctx.lineWidth=2;obstacles.filter(o=>o.solid).forEach((o)=>ctx.strokeRect(o.x-camX,o.y-camY,o.w,o.h));ctx.strokeStyle='rgba(80,220,255,.85)';ctx.beginPath();ctx.arc(p.x-camX,p.y-camY,p.radius,0,Math.PI*2);ctx.stroke();} }
