@@ -1,7 +1,7 @@
 'use client';
 import { useEffect, useRef, useState } from 'react';
 import { byId, CHARACTERS } from '@/game/characters';
-import { inputState, resetInputState, setActionPressed, setJoystickAnalog, setKeyboardMovement } from '@/game/input';
+import { inputState, resetInputState, setActionPressed, setKeyboardMovement } from '@/game/input';
 import { CharacterId, Fighter, GameState, InputState, Obstacle } from '@/game/types';
 
 const W = 2400, H = 1600, viewW = 1000, viewH = 620;
@@ -26,13 +26,10 @@ function mkState(playerId: CharacterId): GameState { /* unchanged-ish */
 
 export function GameCanvas({ character, onResult }: { character: CharacterId; onResult: (r: 'victory' | 'defeat') => void }) {
   const cv = useRef<HTMLCanvasElement>(null);
-  const joystickRef = useRef<HTMLDivElement>(null);
-  const joystickPointerId = useRef<number | null>(null);
-  const joystickTouching = useRef(false);
   const shakeRef = useRef(0);
   const [hud, setHud] = useState({ hp: 0, max: 0, alive: 8, skill: 0, t: 0, out: false, name: '', icon: '' });
   const [isTouchDevice, setIsTouchDevice] = useState(false);
-  const [thumb, setThumb] = useState({ x: 0, y: 0 });
+  const [dpadPressed, setDpadPressed] = useState({ up: false, down: false, left: false, right: false });
   const [attackPressed, setAttackPressed] = useState(false);
   const [skillPressed, setSkillPressed] = useState(false);
 
@@ -41,32 +38,11 @@ export function GameCanvas({ character, onResult }: { character: CharacterId; on
     setIsTouchDevice(coarse || navigator.maxTouchPoints > 0 || 'ontouchstart' in window);
   }, []);
 
-  const updateJoystick = (clientX: number, clientY: number) => {
-    const stick = joystickRef.current;
-    if (!stick) return;
-    const rect = stick.getBoundingClientRect();
-    const cx = rect.left + rect.width / 2;
-    const cy = rect.top + rect.height / 2;
-    const dx = clientX - cx;
-    const dy = clientY - cy;
-    const len = Math.hypot(dx, dy);
-    const dynamicRadius = Math.max(20, rect.width * 0.42);
-    const clamped = Math.min(len, dynamicRadius);
-    const nx = len > 0 ? dx / len : 0;
-    const ny = len > 0 ? dy / len : 0;
-    const tx = nx * clamped;
-    const ty = ny * clamped;
-    setThumb({ x: tx, y: ty });
-    const magnitude = clamped / dynamicRadius;
-    setJoystickAnalog(nx * magnitude, ny * magnitude);
+  const setDpadMovement = (direction: 'up' | 'down' | 'left' | 'right', pressed: boolean) => {
+    setKeyboardMovement(direction, pressed);
+    setDpadPressed((current) => ({ ...current, [direction]: pressed }));
   };
 
-  const resetJoystick = () => {
-    joystickPointerId.current = null;
-    joystickTouching.current = false;
-    setJoystickAnalog(0, 0);
-    setThumb({ x: 0, y: 0 });
-  };
 
   useEffect(() => {
     resetInputState();
@@ -111,32 +87,6 @@ export function GameCanvas({ character, onResult }: { character: CharacterId; on
     };
   }, [character, onResult]);
 
-  useEffect(() => {
-    const move = (e: PointerEvent) => {
-      if (!joystickTouching.current) return;
-      if (joystickPointerId.current !== null && e.pointerId !== joystickPointerId.current) return;
-      e.preventDefault();
-      updateJoystick(e.clientX, e.clientY);
-    };
-    const end = (e: PointerEvent) => {
-      if (!joystickTouching.current) return;
-      if (joystickPointerId.current !== null && e.pointerId !== joystickPointerId.current) return;
-      resetJoystick();
-    };
-    window.addEventListener('pointermove', move, { passive: false });
-    window.addEventListener('pointerup', end);
-    window.addEventListener('pointercancel', end);
-    return () => {
-      window.removeEventListener('pointermove', move);
-      window.removeEventListener('pointerup', end);
-      window.removeEventListener('pointercancel', end);
-    };
-  }, []);
-
-
-
-  const touchFromEvent = (touch: { clientX: number; clientY: number }) => updateJoystick(touch.clientX, touch.clientY);
-
   const skillCooldownActive = hud.skill > 0.01;
 
   return <div className='game-wrap gameplay-touch-lock'>
@@ -156,50 +106,29 @@ export function GameCanvas({ character, onResult }: { character: CharacterId; on
     <canvas ref={cv} width={viewW} height={viewH} />
     {isTouchDevice && (
       <div className='mobile-controls'>
-        <div
-          ref={joystickRef}
-          className='joystick'
-          onTouchStart={(e) => {
-            e.preventDefault();
-            joystickTouching.current = true;
-            const t = e.changedTouches[0];
-            if (t) touchFromEvent(t);
-          }}
-          onTouchMove={(e) => {
-            if (!joystickTouching.current) return;
-            e.preventDefault();
-            const t = e.changedTouches[0];
-            if (t) touchFromEvent(t);
-          }}
-          onTouchEnd={(e) => {
-            e.preventDefault();
-            resetJoystick();
-          }}
-          onTouchCancel={() => resetJoystick()}
-          onPointerDown={(e) => {
-            e.preventDefault();
-            joystickPointerId.current = e.pointerId;
-            joystickTouching.current = true;
-            e.currentTarget.setPointerCapture(e.pointerId);
-            updateJoystick(e.clientX, e.clientY);
-          }}
-          onPointerMove={(e) => {
-            if (!joystickTouching.current || joystickPointerId.current !== e.pointerId) return;
-            e.preventDefault();
-            updateJoystick(e.clientX, e.clientY);
-          }}
-          onPointerUp={(e) => {
-            if (!joystickTouching.current || joystickPointerId.current !== e.pointerId) return;
-            e.preventDefault();
-            resetJoystick();
-          }}
-          onPointerCancel={(e) => {
-            if (!joystickTouching.current || joystickPointerId.current !== e.pointerId) return;
-            e.preventDefault();
-            resetJoystick();
-          }}
-        >
-          <span className='joystick-thumb' style={{ transform: `translate(${thumb.x}px, ${thumb.y}px)` }} />
+        <div className='mobile-dpad' aria-label='이동 버튼'>
+          {(['up', 'left', 'right', 'down'] as const).map((direction) => (
+            <button
+              key={direction}
+              type='button'
+              className={`dpad-btn ${direction} ${dpadPressed[direction] ? 'pressed' : ''}`}
+              aria-label={`${direction} 이동`}
+              onPointerDown={(e) => {
+                e.preventDefault();
+                e.currentTarget.setPointerCapture(e.pointerId);
+                setDpadMovement(direction, true);
+              }}
+              onPointerUp={(e) => {
+                e.preventDefault();
+                setDpadMovement(direction, false);
+              }}
+              onPointerCancel={() => setDpadMovement(direction, false)}
+              onLostPointerCapture={() => setDpadMovement(direction, false)}
+              onContextMenu={(e) => e.preventDefault()}
+            >
+              {direction === 'up' ? '▲' : direction === 'down' ? '▼' : direction === 'left' ? '◀' : '▶'}
+            </button>
+          ))}
         </div>
         <div className='mobile-buttons'>
           <button
