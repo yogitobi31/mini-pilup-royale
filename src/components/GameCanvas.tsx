@@ -33,11 +33,18 @@ const obstacles: ArenaObstacle[] = [
 ];
 const idIcon: Record<CharacterId, string> = { juwon: '🔔', kyungmin: '🎵', hyunjun: '❓', chanyoung: '🙂', hyowon: '🪤', dongha: '⚙️', heesun: '✏️', soeun: '🐞' };
 
+type SpawnChecks = { insideSafeZone: boolean; notInsideObstacle: boolean; distanceFromOtherPlayers: boolean; distanceFromObstacles: boolean; insideMapBounds: boolean };
+
 type MutableGame = {
   state: GameState;
   activePlayerId: string;
   camera: { x: number; y: number };
   input: InputState;
+  spawnDebug: {
+    points: { id: string; x: number; y: number }[];
+    assignments: { fighterId: string; charId: CharacterId; pointId: string; x: number; y: number; isPlayer: boolean; checks: SpawnChecks; spawnRejectedReason: string | null }[];
+    activePlayerPointId: string;
+  };
   debugMove: {
     beforeMoveX: number;
     beforeMoveY: number;
@@ -63,8 +70,38 @@ type MutableGame = {
 function mkState(playerId: CharacterId): GameState {
   const ids = CHARACTERS.map((c) => c.id);
   const order = [playerId, ...ids.filter((i) => i !== playerId)];
-  const fighters: Fighter[] = order.map((id, i) => { const d=byId(id); return ({ id: `f${i}`, charId: id, x: 280 + (i % 4) * 500, y: 380 + Math.floor(i / 4) * 620, vx: 0, vy: 0, radius: d.bodyRadius, hp: d.maxHp*combatConfig.globalHpMultiplier, alive: true, isPlayer: i === 0, lastAttack: -99, lastSkill: -99, lastHitAt:-99, flashUntil:0, fadeUntil:0, facing: { x: 1, y: 0 }, status: { slowUntil: 0, stunUntil: 0, confuseUntil: 0, defenseUntil: 0, shieldUntil: 0, panicUntil: 0, speedUntil: 0 } }); });
-  return { fighters, obstacles, safeZone: { x: W / 2, y: H / 2, radius: 920, minRadius: 170, shrinkPerSec: 3.6, tick: 0 }, projectiles: [], traps: [], devices: [], effects: [], time: 0, elapsed: 0, result: 'playing' };
+  const safeZone = { x: W / 2, y: H / 2, radius: 920, minRadius: 170, shrinkPerSec: 3.6, tick: 0 };
+  const candidateSpawnPoints = [
+    { id: 'center-nw', x: 930, y: 640 }, { id: 'center-ne', x: 1470, y: 640 }, { id: 'center-sw', x: 930, y: 950 }, { id: 'center-se', x: 1470, y: 950 },
+    { id: 'north-west', x: 620, y: 460 }, { id: 'north-east', x: 1780, y: 460 }, { id: 'south-west', x: 620, y: 1160 }, { id: 'south-east', x: 1780, y: 1160 },
+  ];
+  const fighters: Fighter[] = [];
+  const assignments: MutableGame['spawnDebug']['assignments'] = [];
+  const available = [...candidateSpawnPoints];
+  for (let i = 0; i < order.length; i += 1) {
+    const id = order[i];
+    const d = byId(id);
+    let chosen = available[0];
+    let chosenChecks: SpawnChecks = { insideSafeZone: false, notInsideObstacle: false, distanceFromOtherPlayers: false, distanceFromObstacles: false, insideMapBounds: false };
+    let chosenReason: string | null = 'noCandidate';
+    for (const point of available) {
+      const insideSafeZone = dist(point.x, point.y, safeZone.x, safeZone.y) + d.bodyRadius <= safeZone.radius;
+      const notInsideObstacle = obstacles.every((o) => !circleIntersectsRect(point.x, point.y, d.bodyRadius + 2, o));
+      const distanceFromOtherPlayers = fighters.every((f) => dist(point.x, point.y, f.x, f.y) >= d.bodyRadius + f.radius + combatConfig.spawnMinDistance);
+      const distanceFromObstacles = obstacles.every((o) => circleRectDistance(point.x, point.y, o) >= d.bodyRadius + 26);
+      const insideMapBounds = point.x - d.bodyRadius >= 0 && point.x + d.bodyRadius <= W && point.y - d.bodyRadius >= 0 && point.y + d.bodyRadius <= H;
+      const checks = { insideSafeZone, notInsideObstacle, distanceFromOtherPlayers, distanceFromObstacles, insideMapBounds };
+      const ok = insideSafeZone && notInsideObstacle && distanceFromOtherPlayers && distanceFromObstacles && insideMapBounds;
+      if (ok) { chosen = point; chosenChecks = checks; chosenReason = null; break; }
+      if (chosenReason === 'noCandidate') { chosen = point; chosenChecks = checks; chosenReason = !insideSafeZone ? 'outsideSafeZone' : !insideMapBounds ? 'outsideMapBounds' : !notInsideObstacle ? 'insideObstacleCollision' : !distanceFromObstacles ? 'tooCloseToObstacle' : 'tooCloseToOtherPlayer'; }
+    }
+    const f: Fighter = { id: `f${i}`, charId: id, x: chosen.x, y: chosen.y, vx: 0, vy: 0, radius: d.bodyRadius, hp: d.maxHp * combatConfig.globalHpMultiplier, alive: true, isPlayer: i === 0, lastAttack: -99, lastSkill: -99, lastHitAt: -99, flashUntil: 0, fadeUntil: 0, facing: { x: 1, y: 0 }, status: { slowUntil: 0, stunUntil: 0, confuseUntil: 0, defenseUntil: 0, shieldUntil: 0, panicUntil: 0, speedUntil: 0 } };
+    fighters.push(f);
+    assignments.push({ fighterId: f.id, charId: f.charId, pointId: chosen.id, x: chosen.x, y: chosen.y, isPlayer: f.isPlayer, checks: chosenChecks, spawnRejectedReason: chosenReason });
+    available.splice(available.findIndex((p) => p.id === chosen.id), 1);
+  }
+  (mkState as any).lastSpawnDebug = { points: candidateSpawnPoints, assignments, activePlayerPointId: assignments.find((a) => a.isPlayer)?.pointId ?? '' };
+  return { fighters, obstacles, safeZone, projectiles: [], traps: [], devices: [], effects: [], time: 0, elapsed: 0, result: 'playing' };
 }
 
 export function GameCanvas({ character, onResult }: { character: CharacterId; onResult: (r: 'victory' | 'defeat') => void }) {
@@ -114,6 +151,7 @@ export function GameCanvas({ character, onResult }: { character: CharacterId; on
       activePlayerId: activePlayer?.id ?? state.fighters[0].id,
       camera: { x: 0, y: 0 },
       input: inputState,
+      spawnDebug: (mkState as any).lastSpawnDebug,
       debugMove: { beforeMoveX: 0, beforeMoveY: 0, attemptedNextX: 0, attemptedNextY: 0, afterMoveX: 0, afterMoveY: 0, beforeRenderX: 0, beforeRenderY: 0, movedDeltaX: 0, movedDeltaY: 0, collisionBlocked: false, collisionObstacleId: '', lastBlockedReason: '', blockedX: false, blockedY: false, clampBlocked: false, resetDetected: false, updateCalled: false },
     };
 
@@ -216,6 +254,9 @@ export function GameCanvas({ character, onResult }: { character: CharacterId; on
       <div>lastBlockedReason: {debug.lastBlockedReason || 'none'} | blockedX: {String(debug.blockedX)} | blockedY: {String(debug.blockedY)} | clampBlocked: {String(debug.clampBlocked)} | resetDetected: {String(debug.resetDetected)}</div>
       <div>elapsed: {debug.elapsedTime.toFixed(1)}s | avgHp: {debug.averageHpPercent.toFixed(1)}% | firstDeath: {debug.firstDeathTime > 0 ? `${debug.firstDeathTime.toFixed(1)}s` : 'none'}</div>
       <div>dpsEvents: {debug.dps.toFixed(2)} | separation: {debug.separationCount} | maxAttackersOnTarget: {debug.maxAttackersOnTarget}</div>
+      <div>spawn points: {gameRef.current?.spawnDebug.points.map((p) => `${p.id}(${p.x},${p.y})`).join(' | ')}</div>
+      <div>activePlayer spawn point: {gameRef.current?.spawnDebug.activePlayerPointId}</div>
+      {gameRef.current?.spawnDebug.assignments.map((a) => <div key={a.fighterId}>{a.fighterId}/{a.charId} @({a.x},{a.y}) checks safe={String(a.checks.insideSafeZone)} obstacle={String(a.checks.notInsideObstacle)} distPlayers={String(a.checks.distanceFromOtherPlayers)} distObs={String(a.checks.distanceFromObstacles)} rejected={a.spawnRejectedReason ?? 'none'}</div>)}
     </div>}
     <canvas ref={cv} width={viewW} height={viewH} />
     {isTouchDevice && (
@@ -415,3 +456,7 @@ ctx.fillStyle = 'rgba(20,30,55,.38)'; ctx.fillRect(0, 0, viewW, viewH); ctx.save
 for (const e of s.effects as any[]) { if(e.kind==='dmg'){ctx.globalAlpha=Math.max(0,e.ttl/0.65); ctx.fillStyle=e.crit?'#ffd55c':'#ffffff'; ctx.font=e.crit?'bold 17px Inter':'bold 14px Inter'; ctx.fillText(e.text,e.x-camX,e.y-camY); ctx.globalAlpha=1; continue;} ctx.strokeStyle = e.kind === 'hit' ? '#fff' : e.kind === 'death' ? '#ffd0c0' : '#73b8ff'; ctx.globalAlpha=Math.max(0,e.ttl); ctx.beginPath(); ctx.arc(e.x - camX, e.y - camY, e.r, 0, Math.PI * 2); ctx.stroke(); ctx.globalAlpha=1; }
 for (const f of s.fighters) { if (!f.alive) continue; const c = byId(f.charId); const hpRate=Math.max(0,f.hp/(byId(f.charId).maxHp*combatConfig.globalHpMultiplier)); if(s.time<f.flashUntil){ctx.fillStyle='rgba(255,140,140,.95)';}else{ctx.fillStyle = c.fallbackColor;} ctx.beginPath(); ctx.arc(f.x - camX, f.y - camY, f.radius, 0, Math.PI * 2); ctx.fill(); ctx.fillStyle = '#111'; ctx.fillText(idIcon[c.id], f.x - camX - 7, f.y - camY + 4); ctx.fillStyle='#dbe5ff'; ctx.fillText(c.nameKo, f.x - camX - 20, f.y - camY - f.radius - 10); ctx.fillStyle = '#1e2230'; ctx.fillRect(f.x - camX - 24, f.y - camY + f.radius + 6, 48, 6); ctx.fillStyle='#5e667d'; ctx.fillRect(f.x - camX - 24, f.y - camY + f.radius + 6, 48*Math.min(1,(f as any).trailHpRate??hpRate),6); (f as any).trailHpRate=((f as any).trailHpRate??hpRate)+(hpRate-((f as any).trailHpRate??hpRate))*0.15; ctx.fillStyle = hpRate<0.3?'#ff5d5d':'#59de72'; ctx.fillRect(f.x - camX - 24, f.y - camY + f.radius + 6, 48 * hpRate, 6); }
 ctx.beginPath(); ctx.strokeStyle = '#ffcf5e'; ctx.lineWidth = 2; ctx.arc(p.x - camX, p.y - camY, p.radius+4, 0, Math.PI * 2); ctx.stroke(); const debugMode = typeof window !== 'undefined' && new URLSearchParams(window.location.search).get('debug') === '1'; if (debugMode) {ctx.strokeStyle='rgba(255,80,80,.75)';ctx.lineWidth=2;obstacles.filter(o=>o.solid).forEach((o)=>ctx.strokeRect(o.x-camX,o.y-camY,o.w,o.h));ctx.strokeStyle='rgba(80,220,255,.85)';ctx.beginPath();ctx.arc(p.x-camX,p.y-camY,p.radius,0,Math.PI*2);ctx.stroke();} }
+
+function circleRectDistance(cx:number,cy:number,r:Obstacle){const nx=clamp(cx,r.x,r.x+r.w); const ny=clamp(cy,r.y,r.y+r.h); return dist(cx,cy,nx,ny);}
+
+function circleIntersectsRect(cx:number,cy:number,r:number,rect:Obstacle){return circleRectDistance(cx,cy,rect)<r;}
