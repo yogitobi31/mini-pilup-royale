@@ -1,7 +1,7 @@
 'use client';
 import { useEffect, useRef, useState } from 'react';
 import { byId, CHARACTERS } from '@/game/characters';
-import { inputState, resetInputState, setActionPressed, setKeyboardMovement } from '@/game/input';
+import { inputState, resetInputState, setActionPressed, setJoystickAnalog, setKeyboardMovement } from '@/game/input';
 import { CharacterId, Fighter, GameState, InputState, Obstacle } from '@/game/types';
 
 const W = 2400, H = 1600, viewW = 1000, viewH = 620;
@@ -36,11 +36,14 @@ export function GameCanvas({ character, onResult }: { character: CharacterId; on
   const shakeRef = useRef(0);
   const gameRef = useRef<MutableGame | null>(null);
   const [hud, setHud] = useState({ hp: 0, max: 0, alive: 8, skill: 0, t: 0, out: false, name: '', icon: '' });
-  const [debug, setDebug] = useState({ activePlayerId: '', x: 0, y: 0, dx: 0, dy: 0, isMoving: false });
+  const [debug, setDebug] = useState({ gameStarted: false, activePlayerId: '', activePlayerName: '', x: 0, y: 0, dx: 0, dy: 0, pressedKeys: '', deltaTime: 0, isMoving: false, cameraX: 0, cameraY: 0, updateTick: 0, renderTick: 0, autoMoveActive: false });
   const [isTouchDevice, setIsTouchDevice] = useState(false);
   const [dpadPressed, setDpadPressed] = useState({ up: false, down: false, left: false, right: false });
   const [attackPressed, setAttackPressed] = useState(false);
   const [skillPressed, setSkillPressed] = useState(false);
+  const joystickPointerIdRef = useRef<number | null>(null);
+  const joystickCenterRef = useRef({ x: 0, y: 0 });
+  const joystickInputRef = useRef({ x: 0, y: 0 });
 
   useEffect(() => {
     const coarse = window.matchMedia('(pointer: coarse)').matches;
@@ -79,6 +82,8 @@ export function GameCanvas({ character, onResult }: { character: CharacterId; on
     window.addEventListener('keyup', up, { passive: false });
 
     let raf = 0;
+    let updateTick = 0;
+    let renderTick = 0;
     let last = performance.now();
     const loop = (now: number) => {
       if (!gameRef.current || !cv.current) return;
@@ -88,12 +93,24 @@ export function GameCanvas({ character, onResult }: { character: CharacterId; on
       game.state.time += dt;
       game.state.elapsed += dt;
       shakeRef.current = Math.max(0, shakeRef.current - dt * 18);
+      updateTick += 1;
       tick(game, dt, () => { shakeRef.current = 4; });
+      renderTick += 1;
       draw(game, cv.current, shakeRef.current);
       const p = getActivePlayer(game);
       const def = byId(p.charId);
       setHud({ hp: Math.max(0, p.hp), max: def.maxHp, alive: game.state.fighters.filter((f) => f.alive).length, skill: Math.max(0, def.skillCooldown - (game.state.time - p.lastSkill)), t: game.state.elapsed, out: dist(p.x, p.y, game.state.safeZone.x, game.state.safeZone.y) > game.state.safeZone.radius, name: def.nameKo, icon: idIcon[def.id] });
-      setDebug({ activePlayerId: game.activePlayerId, x: p.x, y: p.y, dx: game.input.analogX || ((game.input.right ? 1 : 0) - (game.input.left ? 1 : 0)), dy: game.input.analogY || ((game.input.down ? 1 : 0) - (game.input.up ? 1 : 0)), isMoving: Math.hypot(p.vx, p.vy) > 0.01 });
+      const dx = game.input.analogX || ((game.input.right ? 1 : 0) - (game.input.left ? 1 : 0));
+      const dy = game.input.analogY || ((game.input.down ? 1 : 0) - (game.input.up ? 1 : 0));
+      const pressedKeys = [
+        game.input.up ? 'up' : '',
+        game.input.down ? 'down' : '',
+        game.input.left ? 'left' : '',
+        game.input.right ? 'right' : '',
+        game.input.attackPressed ? 'attack' : '',
+        game.input.skillPressed ? 'skill' : '',
+      ].filter(Boolean).join(',');
+      setDebug({ gameStarted: true, activePlayerId: game.activePlayerId, activePlayerName: def.nameKo, x: p.x, y: p.y, dx, dy, pressedKeys, deltaTime: dt, isMoving: Math.hypot(p.vx, p.vy) > 0.01, cameraX: game.camera.x, cameraY: game.camera.y, updateTick, renderTick, autoMoveActive: game.state.elapsed < 2 });
       if (game.state.result !== 'playing') { onResult(game.state.result); return; }
       raf = requestAnimationFrame(loop);
     };
@@ -124,7 +141,14 @@ export function GameCanvas({ character, onResult }: { character: CharacterId; on
       </div>
       {isTouchDevice && <button className='mobile-menu-btn' aria-label='메뉴'>☰</button>}
     </div>
-    <div className='debug-telemetry'>id:{debug.activePlayerId} x:{debug.x.toFixed(1)} y:{debug.y.toFixed(1)} dx:{debug.dx.toFixed(2)} dy:{debug.dy.toFixed(2)} move:{String(debug.isMoving)}</div>
+    <div className='debug-telemetry'>
+      <div>gameStarted: {String(debug.gameStarted)} | activePlayerId: {debug.activePlayerId}</div>
+      <div>activePlayer: {debug.activePlayerName}</div>
+      <div>x: {debug.x.toFixed(1)} y: {debug.y.toFixed(1)} | camX: {debug.cameraX.toFixed(1)} camY: {debug.cameraY.toFixed(1)}</div>
+      <div>input dx: {debug.dx.toFixed(2)} dy: {debug.dy.toFixed(2)} | keys: {debug.pressedKeys || 'none'}</div>
+      <div>deltaTime: {debug.deltaTime.toFixed(4)} | isMoving: {String(debug.isMoving)} | autoMove: {String(debug.autoMoveActive)}</div>
+      <div>update/render ticks: {debug.updateTick}/{debug.renderTick}</div>
+    </div>
     <canvas ref={cv} width={viewW} height={viewH} />
     {isTouchDevice && (
       <div className='mobile-controls'>
@@ -145,6 +169,42 @@ export function GameCanvas({ character, onResult }: { character: CharacterId; on
             </button>
           ))}
         </div>
+        <div
+          className='mobile-joystick'
+          onPointerDown={(e) => {
+            e.preventDefault();
+            joystickPointerIdRef.current = e.pointerId;
+            joystickCenterRef.current = { x: e.clientX, y: e.clientY };
+            joystickInputRef.current = { x: 0, y: 0 };
+            setJoystickAnalog(0, 0);
+            e.currentTarget.setPointerCapture(e.pointerId);
+          }}
+          onPointerMove={(e) => {
+            if (joystickPointerIdRef.current !== e.pointerId) return;
+            e.preventDefault();
+            const dx = e.clientX - joystickCenterRef.current.x;
+            const dy = e.clientY - joystickCenterRef.current.y;
+            const radius = 40;
+            const nx = Math.max(-1, Math.min(1, dx / radius));
+            const ny = Math.max(-1, Math.min(1, dy / radius));
+            joystickInputRef.current = { x: nx, y: ny };
+            setJoystickAnalog(nx, ny);
+          }}
+          onPointerUp={(e) => {
+            if (joystickPointerIdRef.current !== e.pointerId) return;
+            e.preventDefault();
+            joystickPointerIdRef.current = null;
+            joystickInputRef.current = { x: 0, y: 0 };
+            setJoystickAnalog(0, 0);
+          }}
+          onPointerCancel={() => {
+            joystickPointerIdRef.current = null;
+            joystickInputRef.current = { x: 0, y: 0 };
+            setJoystickAnalog(0, 0);
+          }}
+        >
+          <div className='mobile-joystick-knob' style={{ transform: `translate(${joystickInputRef.current.x * 20}px, ${joystickInputRef.current.y * 20}px)` }} />
+        </div>
         <div className='mobile-buttons'>
           <button className={`touch-btn skill ${skillPressed ? 'pressed' : ''} ${skillCooldownActive ? 'disabled' : ''}`} onPointerDown={(e) => { e.preventDefault(); setSkillPressed(true); setActionPressed('skillPressed', true); }} onPointerUp={(e) => { e.preventDefault(); setSkillPressed(false); setActionPressed('skillPressed', false); }} onPointerCancel={() => { setSkillPressed(false); setActionPressed('skillPressed', false); }}>스킬{skillCooldownActive ? ` ${hud.skill.toFixed(1)}s` : ''}</button>
           <button className={`touch-btn attack ${attackPressed ? 'pressed' : ''}`} onPointerDown={(e) => { e.preventDefault(); setAttackPressed(true); setActionPressed('attackPressed', true); }} onPointerUp={(e) => { e.preventDefault(); setAttackPressed(false); setActionPressed('attackPressed', false); }} onPointerCancel={() => { setAttackPressed(false); setActionPressed('attackPressed', false); }}>공격</button>
@@ -159,6 +219,7 @@ const clamp = (v: number, min: number, max: number) => Math.max(min, Math.min(ma
 const getActivePlayer = (g: MutableGame) => g.state.fighters.find((f) => f.id === g.activePlayerId) ?? g.state.fighters[0];
 
 function tick(g: MutableGame, dt: number, hit: () => void) {
+  if (!Number.isFinite(dt) || dt <= 0) return;
   const s = g.state;
   const i = g.input;
   s.safeZone.radius = Math.max(s.safeZone.minRadius, s.safeZone.radius - s.safeZone.shrinkPerSec * dt);
@@ -184,6 +245,10 @@ function tick(g: MutableGame, dt: number, hit: () => void) {
       const t = chooseTarget(s, idx);
       if (dist(f.x, f.y, s.safeZone.x, s.safeZone.y) > s.safeZone.radius + 20) { dx = s.safeZone.x - f.x; dy = s.safeZone.y - f.y; }
       else if (t) { dx = t.x - f.x; dy = t.y - f.y; if (Math.random() < 0.006) useSkill(s, f); if (dist(f.x, f.y, t.x, t.y) < c.attackRange + 10) attack(s, f, hit); }
+    }
+    if (f.id === g.activePlayerId && s.elapsed < 2) {
+      dx = 1;
+      dy = 0;
     }
     if (i.attackPressed && f.id === g.activePlayerId) attack(s, f, hit);
     if (i.skillPressed && f.id === g.activePlayerId) useSkill(s, f);
@@ -215,4 +280,5 @@ function draw(g: MutableGame, can: HTMLCanvasElement, shake: number) { const ctx
 obstacles.forEach((o) => { ctx.fillStyle = o.color; ctx.fillRect(o.x - camX, o.y - camY, o.w, o.h); ctx.fillStyle = '#263'; ctx.fillText(o.label, o.x - camX + 8, o.y - camY + 18); }); ctx.strokeStyle = '#fff'; ctx.lineWidth = 2; ctx.strokeRect(980 - camX, 620 - camY, 460, 300); ctx.fillStyle = '#2c8a48'; ctx.fillText('PILUP', 1180 - camX, 780 - camY);
 ctx.fillStyle = 'rgba(130,20,50,.15)'; ctx.fillRect(0, 0, viewW, viewH); ctx.save(); ctx.beginPath(); ctx.arc(s.safeZone.x - camX, s.safeZone.y - camY, s.safeZone.radius, 0, Math.PI * 2); ctx.clip(); ctx.clearRect(0, 0, viewW, viewH); ctx.restore(); ctx.strokeStyle = '#ff5370'; ctx.lineWidth = 3; ctx.beginPath(); ctx.arc(s.safeZone.x - camX, s.safeZone.y - camY, s.safeZone.radius, 0, Math.PI * 2); ctx.stroke();
 for (const e of s.effects) { ctx.strokeStyle = e.kind === 'hit' ? '#fff' : e.kind === 'hyowon' ? '#ff7b22' : e.kind === 'juwon' ? '#4f8fff' : e.kind === 'soeun' ? '#f0e742' : '#333'; ctx.beginPath(); ctx.arc(e.x - camX, e.y - camY, e.r, 0, Math.PI * 2); ctx.stroke(); }
+ctx.beginPath(); ctx.strokeStyle = '#ff4040'; ctx.lineWidth = 3; ctx.arc(p.x - camX, p.y - camY, 12, 0, Math.PI * 2); ctx.stroke();
 for (const f of s.fighters) { if (!f.alive) continue; const c = byId(f.charId); ctx.fillStyle = c.fallbackColor; ctx.beginPath(); ctx.arc(f.x - camX, f.y - camY, f.radius, 0, Math.PI * 2); ctx.fill(); ctx.fillStyle = '#111'; ctx.fillText(idIcon[c.id], f.x - camX - 7, f.y - camY + 4); ctx.fillText(c.nameKo, f.x - camX - 20, f.y - camY - f.radius - 8); ctx.fillStyle = '#333'; ctx.fillRect(f.x - camX - 22, f.y - camY + f.radius + 5, 44, 5); ctx.fillStyle = '#58d866'; ctx.fillRect(f.x - camX - 22, f.y - camY + f.radius + 5, 44 * (f.hp / byId(f.charId).maxHp), 5); } }

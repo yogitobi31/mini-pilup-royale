@@ -53,4 +53,6 @@ canvas{display:block;margin:0 auto;border:2px solid #7188ff;border-radius:16px;b
   .touch-btn.skill{width:clamp(52px,9vw,64px);height:clamp(52px,9vw,64px);margin-right:36px}
 }
 
-.debug-telemetry{position:absolute;left:10px;bottom:10px;z-index:5;padding:4px 8px;border-radius:8px;font-size:11px;color:#eaf2ff;background:rgba(7,13,30,.45);backdrop-filter:blur(4px);pointer-events:none}
+.debug-telemetry{position:absolute;left:10px;top:10px;z-index:6;padding:6px 9px;border-radius:8px;font-size:11px;line-height:1.35;color:#eaf2ff;background:rgba(7,13,30,.56);backdrop-filter:blur(4px);pointer-events:none;max-width:min(90vw,460px)}
+.mobile-joystick{position:absolute;left:16px;bottom:16px;width:96px;height:96px;border-radius:50%;border:1px solid rgba(255,255,255,.45);background:rgba(13,22,45,.4);pointer-events:auto;touch-action:none;display:grid;place-items:center;box-shadow:0 10px 20px rgba(0,0,0,.28)}
+.mobile-joystick-knob{width:42px;height:42px;border-radius:50%;background:rgba(145,183,255,.82);border:1px solid rgba(255,255,255,.65)}
