@@ -20,8 +20,9 @@ export function CharacterSelect({ onStart }: { onStart: (id: CharacterId) => voi
 
   return (
     <div className='screen select-screen'>
+      <div className='screen-content'>
       <h1 className='menu-title'>필업 아레나: 마지막 종</h1>
-      <p className='menu-subtitle'>Mini Pilup Royale</p>
+      <p className='menu-subtitle'>Mini Pilup Royale · 캐릭터를 선택하세요</p>
       <div className='character-grid'>
         {CHARACTERS.map((c) => {
           const selected = sel === c.id;
@@ -46,6 +47,7 @@ export function CharacterSelect({ onStart }: { onStart: (id: CharacterId) => voi
               <b>{c.nameKo}</b>
               <small className='pill'>{c.role}</small>
               <small>{c.skillNameKorean}</small>
+              <small className='tap-hint'>탭하여 선택</small>
             </button>
           );
         })}
@@ -53,6 +55,7 @@ export function CharacterSelect({ onStart }: { onStart: (id: CharacterId) => voi
       <button className='start-btn' disabled={!sel} onClick={() => sel && onStart(sel)}>
         시작하기
       </button>
+      </div>
     </div>
   );
 }
