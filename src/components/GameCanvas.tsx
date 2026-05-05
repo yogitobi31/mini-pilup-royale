@@ -22,12 +22,28 @@ type MutableGame = {
   activePlayerId: string;
   camera: { x: number; y: number };
   input: InputState;
+  debugMove: {
+    beforeMoveX: number;
+    beforeMoveY: number;
+    attemptedNextX: number;
+    attemptedNextY: number;
+    afterMoveX: number;
+    afterMoveY: number;
+    beforeRenderX: number;
+    beforeRenderY: number;
+    movedDeltaX: number;
+    movedDeltaY: number;
+    collisionBlocked: boolean;
+    clampBlocked: boolean;
+    resetDetected: boolean;
+    updateCalled: boolean;
+  };
 };
 
 function mkState(playerId: CharacterId): GameState {
   const ids = CHARACTERS.map((c) => c.id);
   const order = [playerId, ...ids.filter((i) => i !== playerId)];
-  const fighters: Fighter[] = order.map((id, i) => ({ id: `f${i}`, charId: id, x: 280 + (i % 4) * 500, y: 250 + Math.floor(i / 4) * 670, vx: 0, vy: 0, radius: 22, hp: byId(id).maxHp, alive: true, isPlayer: i === 0, lastAttack: -99, lastSkill: -99, facing: { x: 1, y: 0 }, status: { slowUntil: 0, stunUntil: 0, confuseUntil: 0, defenseUntil: 0, shieldUntil: 0, panicUntil: 0, speedUntil: 0 } }));
+  const fighters: Fighter[] = order.map((id, i) => ({ id: `f${i}`, charId: id, x: 280 + (i % 4) * 500, y: 380 + Math.floor(i / 4) * 620, vx: 0, vy: 0, radius: 22, hp: byId(id).maxHp, alive: true, isPlayer: i === 0, lastAttack: -99, lastSkill: -99, facing: { x: 1, y: 0 }, status: { slowUntil: 0, stunUntil: 0, confuseUntil: 0, defenseUntil: 0, shieldUntil: 0, panicUntil: 0, speedUntil: 0 } }));
   return { fighters, obstacles, safeZone: { x: W / 2, y: H / 2, radius: 920, minRadius: 170, shrinkPerSec: 3.6, tick: 0 }, projectiles: [], traps: [], devices: [], effects: [], time: 0, elapsed: 0, result: 'playing' };
 }
 
@@ -36,7 +52,7 @@ export function GameCanvas({ character, onResult }: { character: CharacterId; on
   const shakeRef = useRef(0);
   const gameRef = useRef<MutableGame | null>(null);
   const [hud, setHud] = useState({ hp: 0, max: 0, alive: 8, skill: 0, t: 0, out: false, name: '', icon: '' });
-  const [debug, setDebug] = useState({ gameStarted: false, activePlayerId: '', activePlayerName: '', x: 0, y: 0, dx: 0, dy: 0, pressedKeys: '', deltaTime: 0, isMoving: false, cameraX: 0, cameraY: 0, updateTick: 0, renderTick: 0, autoMoveActive: false });
+  const [debug, setDebug] = useState({ gameStarted: false, activePlayerId: '', activePlayerName: '', x: 0, y: 0, dx: 0, dy: 0, pressedKeys: '', deltaTime: 0, isMoving: false, cameraX: 0, cameraY: 0, updateTick: 0, renderTick: 0, autoMoveActive: false, beforeMoveX: 0, beforeMoveY: 0, afterMoveX: 0, afterMoveY: 0, beforeRenderX: 0, beforeRenderY: 0, attemptedNextX: 0, attemptedNextY: 0, movedDeltaX: 0, movedDeltaY: 0, collisionBlocked: false, clampBlocked: false, resetDetected: false, updateCalled: false });
   const [isTouchDevice, setIsTouchDevice] = useState(false);
   const [dpadPressed, setDpadPressed] = useState({ up: false, down: false, left: false, right: false });
   const [attackPressed, setAttackPressed] = useState(false);
@@ -64,6 +80,7 @@ export function GameCanvas({ character, onResult }: { character: CharacterId; on
       activePlayerId: activePlayer?.id ?? state.fighters[0].id,
       camera: { x: 0, y: 0 },
       input: inputState,
+      debugMove: { beforeMoveX: 0, beforeMoveY: 0, attemptedNextX: 0, attemptedNextY: 0, afterMoveX: 0, afterMoveY: 0, beforeRenderX: 0, beforeRenderY: 0, movedDeltaX: 0, movedDeltaY: 0, collisionBlocked: false, clampBlocked: false, resetDetected: false, updateCalled: false },
     };
 
     const applyKey = (e: KeyboardEvent, pressed: boolean) => {
@@ -98,6 +115,8 @@ export function GameCanvas({ character, onResult }: { character: CharacterId; on
       renderTick += 1;
       draw(game, cv.current, shakeRef.current);
       const p = getActivePlayer(game);
+      game.debugMove.beforeRenderX = p.x;
+      game.debugMove.beforeRenderY = p.y;
       const def = byId(p.charId);
       setHud({ hp: Math.max(0, p.hp), max: def.maxHp, alive: game.state.fighters.filter((f) => f.alive).length, skill: Math.max(0, def.skillCooldown - (game.state.time - p.lastSkill)), t: game.state.elapsed, out: dist(p.x, p.y, game.state.safeZone.x, game.state.safeZone.y) > game.state.safeZone.radius, name: def.nameKo, icon: idIcon[def.id] });
       const dx = game.input.analogX || ((game.input.right ? 1 : 0) - (game.input.left ? 1 : 0));
@@ -110,7 +129,7 @@ export function GameCanvas({ character, onResult }: { character: CharacterId; on
         game.input.attackPressed ? 'attack' : '',
         game.input.skillPressed ? 'skill' : '',
       ].filter(Boolean).join(',');
-      setDebug({ gameStarted: true, activePlayerId: game.activePlayerId, activePlayerName: def.nameKo, x: p.x, y: p.y, dx, dy, pressedKeys, deltaTime: dt, isMoving: Math.hypot(p.vx, p.vy) > 0.01, cameraX: game.camera.x, cameraY: game.camera.y, updateTick, renderTick, autoMoveActive: game.state.elapsed < 2 });
+      setDebug({ gameStarted: true, activePlayerId: game.activePlayerId, activePlayerName: def.nameKo, x: p.x, y: p.y, dx, dy, pressedKeys, deltaTime: dt, isMoving: Math.hypot(p.vx, p.vy) > 0.01, cameraX: game.camera.x, cameraY: game.camera.y, updateTick, renderTick, autoMoveActive: game.state.elapsed < 2, ...game.debugMove });
       if (game.state.result !== 'playing') { onResult(game.state.result); return; }
       raf = requestAnimationFrame(loop);
     };
@@ -147,7 +166,10 @@ export function GameCanvas({ character, onResult }: { character: CharacterId; on
       <div>x: {debug.x.toFixed(1)} y: {debug.y.toFixed(1)} | camX: {debug.cameraX.toFixed(1)} camY: {debug.cameraY.toFixed(1)}</div>
       <div>input dx: {debug.dx.toFixed(2)} dy: {debug.dy.toFixed(2)} | keys: {debug.pressedKeys || 'none'}</div>
       <div>deltaTime: {debug.deltaTime.toFixed(4)} | isMoving: {String(debug.isMoving)} | autoMove: {String(debug.autoMoveActive)}</div>
-      <div>update/render ticks: {debug.updateTick}/{debug.renderTick}</div>
+      <div>update/render ticks: {debug.updateTick}/{debug.renderTick} | updateCalled: {String(debug.updateCalled)}</div>
+      <div>beforeMove ({debug.beforeMoveX.toFixed(1)}, {debug.beforeMoveY.toFixed(1)}) → afterMove ({debug.afterMoveX.toFixed(1)}, {debug.afterMoveY.toFixed(1)})</div>
+      <div>beforeRender ({debug.beforeRenderX.toFixed(1)}, {debug.beforeRenderY.toFixed(1)}) | attempted ({debug.attemptedNextX.toFixed(1)}, {debug.attemptedNextY.toFixed(1)})</div>
+      <div>movedDelta ({debug.movedDeltaX.toFixed(2)}, {debug.movedDeltaY.toFixed(2)}) | collisionBlocked: {String(debug.collisionBlocked)} | clampBlocked: {String(debug.clampBlocked)} | resetDetected: {String(debug.resetDetected)}</div>
     </div>
     <canvas ref={cv} width={viewW} height={viewH} />
     {isTouchDevice && (
@@ -219,6 +241,8 @@ const clamp = (v: number, min: number, max: number) => Math.max(min, Math.min(ma
 const getActivePlayer = (g: MutableGame) => g.state.fighters.find((f) => f.id === g.activePlayerId) ?? g.state.fighters[0];
 
 function tick(g: MutableGame, dt: number, hit: () => void) {
+  const debugDisableCollision = false;
+  g.debugMove.updateCalled = true;
   if (!Number.isFinite(dt) || dt <= 0) return;
   const s = g.state;
   const i = g.input;
@@ -246,10 +270,6 @@ function tick(g: MutableGame, dt: number, hit: () => void) {
       if (dist(f.x, f.y, s.safeZone.x, s.safeZone.y) > s.safeZone.radius + 20) { dx = s.safeZone.x - f.x; dy = s.safeZone.y - f.y; }
       else if (t) { dx = t.x - f.x; dy = t.y - f.y; if (Math.random() < 0.006) useSkill(s, f); if (dist(f.x, f.y, t.x, t.y) < c.attackRange + 10) attack(s, f, hit); }
     }
-    if (f.id === g.activePlayerId && s.elapsed < 2) {
-      dx = 1;
-      dy = 0;
-    }
     if (i.attackPressed && f.id === g.activePlayerId) attack(s, f, hit);
     if (i.skillPressed && f.id === g.activePlayerId) useSkill(s, f);
     const l = Math.hypot(dx, dy) || 1;
@@ -258,15 +278,50 @@ function tick(g: MutableGame, dt: number, hit: () => void) {
     if (f.status.speedUntil > s.time) sp *= 1.3;
     f.vx = dx / l * sp;
     f.vy = dy / l * sp;
-    f.x += f.vx * dt;
-    f.y += f.vy * dt;
-    obstacles.forEach((o) => { if (o.solid && f.x > o.x - f.radius && f.x < o.x + o.w + f.radius && f.y > o.y - f.radius && f.y < o.y + o.h + f.radius) { f.x -= f.vx * dt; f.y -= f.vy * dt; } });
-    f.x = clamp(f.x, f.radius, W - f.radius);
-    f.y = clamp(f.y, f.radius, H - f.radius);
+
+    const beforeMoveX = f.x;
+    const beforeMoveY = f.y;
+    let nextX = f.x + f.vx * dt;
+    let nextY = f.y + f.vy * dt;
+    let collisionBlocked = false;
+    let clampBlocked = false;
+
+    if (!debugDisableCollision) {
+      for (const o of obstacles) {
+        if (o.solid && nextX > o.x - f.radius && nextX < o.x + o.w + f.radius && nextY > o.y - f.radius && nextY < o.y + o.h + f.radius) {
+          collisionBlocked = true;
+          nextX = beforeMoveX;
+          nextY = beforeMoveY;
+          break;
+        }
+      }
+    }
+
+    const clampedX = clamp(nextX, f.radius, W - f.radius);
+    const clampedY = clamp(nextY, f.radius, H - f.radius);
+    if (clampedX !== nextX || clampedY !== nextY) clampBlocked = true;
+
+    f.x = clampedX;
+    f.y = clampedY;
+
+    if (f.id === g.activePlayerId) {
+      g.debugMove.beforeMoveX = beforeMoveX;
+      g.debugMove.beforeMoveY = beforeMoveY;
+      g.debugMove.attemptedNextX = beforeMoveX + f.vx * dt;
+      g.debugMove.attemptedNextY = beforeMoveY + f.vy * dt;
+      g.debugMove.afterMoveX = f.x;
+      g.debugMove.afterMoveY = f.y;
+      g.debugMove.movedDeltaX = f.x - beforeMoveX;
+      g.debugMove.movedDeltaY = f.y - beforeMoveY;
+      g.debugMove.collisionBlocked = collisionBlocked;
+      g.debugMove.clampBlocked = clampBlocked;
+      g.debugMove.resetDetected = false;
+    }
     if (f.hp <= 0) f.alive = false;
   }
   s.effects = s.effects.filter((e) => (e.ttl -= dt) > 0);
   const p = getActivePlayer(g);
+  g.debugMove.resetDetected = Math.abs(g.debugMove.beforeRenderX - g.debugMove.afterMoveX) > 0.01 || Math.abs(g.debugMove.beforeRenderY - g.debugMove.afterMoveY) > 0.01;
   if (!p.alive) s.result = 'defeat';
   const alive = s.fighters.filter((f) => f.alive);
   if (alive.length === 1 && alive[0].id === g.activePlayerId) s.result = 'victory';
