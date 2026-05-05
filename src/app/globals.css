@@ -1,5 +1,8 @@
-*{box-sizing:border-box}body{margin:0;font-family:Inter,Arial,sans-serif;background:linear-gradient(180deg,#dff3ff,#f7f1ff);color:#1f2a44}
-.screen{min-height:100vh;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:12px;padding:20px;text-align:center}
+*{box-sizing:border-box}
+html{min-height:100%;background:#07101f;overscroll-behavior:none}
+body{margin:0;min-height:100vh;font-family:Inter,Arial,sans-serif;background:linear-gradient(180deg,#dff3ff,#f7f1ff);color:#1f2a44;overscroll-behavior:none;-webkit-tap-highlight-color:transparent}
+button{font:inherit}
+.screen{min-height:100vh;min-height:100dvh;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:12px;padding:20px;text-align:center}
 .select-screen{justify-content:flex-start;padding-top:42px}.menu-title{font-size:44px;margin:0}.menu-subtitle{margin:0 0 8px;color:#4c5680;font-weight:700}
 .character-grid{display:grid;grid-template-columns:repeat(4,minmax(180px,1fr));gap:14px;max-width:980px;width:100%}
 .character-card{border:2px solid color-mix(in oklab,var(--card-color),#fff 35%);border-radius:16px;padding:10px;background:#fff;display:flex;flex-direction:column;align-items:center;gap:6px;cursor:pointer}.character-card.sel{outline:4px solid #ffd52d;transform:translateY(-2px)}.portrait{width:100%;height:96px;object-fit:cover;border-radius:10px;background:#edf0f8}
@@ -9,42 +12,42 @@
 canvas{display:block;margin:0 auto;border:2px solid #7188ff;border-radius:16px;background:#0f1726;max-width:100%;height:auto;box-shadow:0 16px 36px rgba(2,8,24,.46)}
 .gameplay-touch-lock{position:relative;touch-action:none;-webkit-user-select:none;user-select:none}
 .mobile-controls{position:absolute;inset:0;pointer-events:none;z-index:4}
-.joystick{position:absolute;left:16px;bottom:18px;width:clamp(94px,22vw,116px);height:clamp(94px,22vw,116px);border-radius:50%;border:1.25px solid rgba(255,255,255,.35);background:radial-gradient(circle at 35% 35%,rgba(255,255,255,.12),rgba(10,18,38,.2));display:flex;align-items:center;justify-content:center;pointer-events:auto;touch-action:none;backdrop-filter:blur(1px)}
-.joystick-thumb{width:clamp(34px,8.8vw,42px);height:clamp(34px,8.8vw,42px);border-radius:50%;background:rgba(232,240,255,.78);box-shadow:0 4px 12px rgba(0,0,0,.18)}
-.mobile-buttons{position:absolute;right:16px;bottom:16px;display:flex;flex-direction:column;gap:10px;align-items:flex-end;pointer-events:auto}
-.touch-btn{width:clamp(70px,19vw,88px);height:clamp(70px,19vw,88px);border-radius:50%;border:1.25px solid rgba(255,255,255,.46);color:#fff;font-size:clamp(15px,3.8vw,19px);font-weight:800;touch-action:none;box-shadow:0 8px 16px rgba(0,0,0,.22);opacity:.84}
-.touch-btn.attack{background:radial-gradient(circle at 30% 25%,#ff9b83,#e74d3f 60%,#ac1f1f)}
-.touch-btn.skill{width:clamp(58px,15vw,74px);height:clamp(58px,15vw,74px);font-size:clamp(12px,2.9vw,15px);margin-right:46px;background:radial-gradient(circle at 30% 25%,#8bc5ff,#386de3 62%,#1c3f95)}
-.touch-btn.pressed{transform:scale(.96);filter:brightness(1.2)}
-.touch-btn.disabled{opacity:.5}
-
+.joystick{position:absolute;left:16px;bottom:18px;width:clamp(104px,23vw,126px);height:clamp(104px,23vw,126px);border-radius:50%;border:1px solid rgba(255,255,255,.42);background:radial-gradient(circle at 38% 34%,rgba(255,255,255,.18),rgba(13,22,45,.32) 54%,rgba(4,9,20,.2));display:flex;align-items:center;justify-content:center;pointer-events:auto;touch-action:none;backdrop-filter:blur(6px);box-shadow:inset 0 0 24px rgba(255,255,255,.08),0 12px 28px rgba(0,0,0,.26)}
+.joystick-thumb{width:clamp(38px,9vw,48px);height:clamp(38px,9vw,48px);border-radius:50%;background:radial-gradient(circle at 32% 28%,#fff,#dce7ff 52%,#95adff);box-shadow:0 6px 16px rgba(0,0,0,.28);will-change:transform}
+.mobile-buttons{position:absolute;right:16px;bottom:16px;display:flex;flex-direction:column;gap:12px;align-items:flex-end;pointer-events:auto;padding-bottom:max(0px,env(safe-area-inset-bottom));padding-right:max(0px,env(safe-area-inset-right))}
+.touch-btn{width:clamp(74px,19vw,92px);height:clamp(74px,19vw,92px);border-radius:50%;border:1px solid rgba(255,255,255,.5);color:#fff;font-size:clamp(15px,3.8vw,19px);font-weight:900;letter-spacing:-.03em;touch-action:none;box-shadow:0 12px 22px rgba(0,0,0,.28),inset 0 1px 10px rgba(255,255,255,.2);opacity:.9;text-shadow:0 1px 4px rgba(0,0,0,.35)}
+.touch-btn.attack{background:radial-gradient(circle at 30% 25%,#ffb09a,#f05a43 58%,#a51e1e)}
+.touch-btn.skill{width:clamp(60px,15vw,76px);height:clamp(60px,15vw,76px);font-size:clamp(12px,2.9vw,15px);margin-right:48px;background:radial-gradient(circle at 30% 25%,#9fd0ff,#4275ea 60%,#1a3c91)}
+.touch-btn.pressed{transform:scale(.94);filter:brightness(1.18)}
+.touch-btn.disabled{opacity:.52}
 .mobile-menu-btn{display:none}
 @media (min-width: 921px){.mobile-controls{display:none}}
 @media (max-width:920px){
+  html,body{background:#07101f}
   .character-grid{grid-template-columns:repeat(2,minmax(160px,1fr))}.menu-title{font-size:32px}.hud-main{flex-direction:column}
-  .game-wrap{width:min(100vw - 8px,1080px);margin:4px auto 0}
-  .mobile-hud{position:absolute;top:8px;left:8px;right:8px;z-index:3;display:grid;grid-template-columns:1fr auto auto;gap:8px;align-items:start;margin:0;pointer-events:none}
-  .mobile-hud .player-panel,.mobile-hud .top-panel{padding:7px 10px;border-radius:11px;background:rgba(7,13,30,.55);backdrop-filter:blur(4px)}
+  .game-wrap{width:100vw;height:100vh;height:100dvh;max-width:none;margin:0;overflow:hidden;background:#07101f;padding:0;padding-top:env(safe-area-inset-top)}
+  .game-wrap.gameplay-touch-lock{position:fixed;inset:0}
+  .game-wrap::before{display:none}
+  .mobile-hud{position:absolute;top:max(8px,env(safe-area-inset-top));left:max(8px,env(safe-area-inset-left));right:max(8px,env(safe-area-inset-right));z-index:3;display:grid;grid-template-columns:minmax(0,1fr) auto auto;gap:8px;align-items:start;margin:0;pointer-events:none}
+  .mobile-hud .player-panel,.mobile-hud .top-panel{padding:7px 10px;border-radius:13px;background:rgba(7,13,30,.5);backdrop-filter:blur(8px);border:1px solid rgba(255,255,255,.13);box-shadow:0 8px 20px rgba(0,0,0,.18)}
   .mobile-hud .player-panel{min-width:0}
-  .mobile-hud .top-panel{gap:10px;font-size:13px;font-weight:700}
+  .mobile-hud .top-panel{gap:10px;font-size:13px;font-weight:800;white-space:nowrap}
   .mobile-hud small{display:none}
   .mobile-hud .player-row{font-size:13px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
-  .mobile-menu-btn{display:grid;place-items:center;width:34px;height:34px;border-radius:10px;border:1px solid rgba(255,255,255,.4);background:rgba(7,13,30,.72);color:#fff;font-size:18px;pointer-events:auto}
+  .mobile-menu-btn{display:grid;place-items:center;width:34px;height:34px;border-radius:12px;border:1px solid rgba(255,255,255,.28);background:rgba(7,13,30,.58);color:#fff;font-size:18px;pointer-events:auto;backdrop-filter:blur(8px)}
   .mobile-menu-btn:active{transform:scale(.95)}
-  canvas{width:100%;height:clamp(58vh,66vh,72vh);object-fit:cover;margin-top:0;border-radius:14px}
-  .mobile-controls{padding-bottom:max(0px,env(safe-area-inset-bottom))}
+  canvas{width:100vw;height:100%;max-width:none;object-fit:cover;margin:0;border:0;border-radius:0;box-shadow:none}
+  .mobile-controls{padding-left:max(0px,env(safe-area-inset-left));padding-bottom:max(0px,env(safe-area-inset-bottom))}
+  .joystick{left:max(16px,env(safe-area-inset-left));bottom:max(18px,env(safe-area-inset-bottom))}
 }
-
 @media (max-width:920px) and (orientation:landscape){
-  .game-wrap{width:min(100vw - 8px,1280px);margin:4px auto}
-  .mobile-hud{top:6px;left:6px;right:6px;grid-template-columns:minmax(220px,1fr) auto auto;gap:6px}
-  .mobile-hud .player-panel,.mobile-hud .top-panel{padding:6px 8px;background:rgba(7,13,30,.48)}
-  .mobile-hud .player-row{font-size:12px}
-  .mobile-hud .top-panel{font-size:12px;gap:8px}
-  canvas{height:calc(100vh - 12px);max-height:78vw;border-radius:10px}
-  .joystick{left:10px;bottom:10px;width:clamp(82px,14vw,94px);height:clamp(82px,14vw,94px);opacity:.78}
-  .joystick-thumb{width:clamp(28px,5vw,34px);height:clamp(28px,5vw,34px)}
-  .mobile-buttons{right:10px;bottom:10px;gap:8px}
-  .touch-btn{width:clamp(62px,11vw,74px);height:clamp(62px,11vw,74px);font-size:clamp(13px,2.4vw,16px);opacity:.78}
-  .touch-btn.skill{width:clamp(52px,9vw,62px);height:clamp(52px,9vw,62px);margin-right:34px}
+  .game-wrap{height:100vh;height:100dvh;padding-top:0}
+  .mobile-hud{top:max(6px,env(safe-area-inset-top));left:max(8px,env(safe-area-inset-left));right:max(8px,env(safe-area-inset-right));grid-template-columns:minmax(190px,.8fr) auto auto;gap:6px}
+  .mobile-hud .player-panel,.mobile-hud .top-panel{padding:6px 8px;background:rgba(7,13,30,.44)}
+  .mobile-hud .player-row{font-size:12px}.mobile-hud .top-panel{font-size:12px;gap:8px}
+  .joystick{left:max(12px,env(safe-area-inset-left));bottom:max(12px,env(safe-area-inset-bottom));width:clamp(86px,14vw,102px);height:clamp(86px,14vw,102px);opacity:.82}
+  .joystick-thumb{width:clamp(30px,5vw,38px);height:clamp(30px,5vw,38px)}
+  .mobile-buttons{right:max(12px,env(safe-area-inset-right));bottom:max(12px,env(safe-area-inset-bottom));gap:8px}
+  .touch-btn{width:clamp(64px,11vw,76px);height:clamp(64px,11vw,76px);font-size:clamp(13px,2.4vw,16px);opacity:.82}
+  .touch-btn.skill{width:clamp(52px,9vw,64px);height:clamp(52px,9vw,64px);margin-right:36px}
 }
