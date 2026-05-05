@@ -4,7 +4,7 @@ import { byId, CHARACTERS } from '@/game/characters';
 import { CharacterId, Fighter, GameState, InputState, Obstacle } from '@/game/types';
 
 const W = 2400, H = 1600, viewW = 1000, viewH = 620;
-const JOYSTICK_RADIUS = 46;
+const JOYSTICK_DEADZONE = 0.08;
 const obstacles: Obstacle[] = [
   { x: 980, y: 620, w: 460, h: 300, label: '운동장 중앙', color: '#caedc6', solid: false },
   { x: 200, y: 160, w: 300, h: 170, label: '교실 코너', color: '#dce9ff', solid: true },
@@ -26,7 +26,7 @@ function mkState(playerId: CharacterId): GameState { /* unchanged-ish */
 
 export function GameCanvas({ character, onResult }: { character: CharacterId; onResult: (r: 'victory' | 'defeat') => void }) {
   const cv = useRef<HTMLCanvasElement>(null);
-  const inputRef = useRef<InputState>({ up: false, down: false, left: false, right: false, moveX: 0, moveY: 0, attack: false, skill: false });
+  const inputRef = useRef<InputState>({ up: false, down: false, left: false, right: false, analogX: 0, analogY: 0, attackPressed: false, skillPressed: false });
   const joystickRef = useRef<HTMLDivElement>(null);
   const joystickPointerId = useRef<number | null>(null);
   const joystickTouching = useRef(false);
@@ -51,27 +51,29 @@ export function GameCanvas({ character, onResult }: { character: CharacterId; on
     const dx = clientX - cx;
     const dy = clientY - cy;
     const len = Math.hypot(dx, dy);
-    const clamped = Math.min(len, JOYSTICK_RADIUS);
+    const dynamicRadius = Math.max(20, rect.width * 0.42);
+    const clamped = Math.min(len, dynamicRadius);
     const nx = len > 0 ? dx / len : 0;
     const ny = len > 0 ? dy / len : 0;
     const tx = nx * clamped;
     const ty = ny * clamped;
     setThumb({ x: tx, y: ty });
-    inputRef.current.moveX = nx * (clamped / JOYSTICK_RADIUS);
-    inputRef.current.moveY = ny * (clamped / JOYSTICK_RADIUS);
+    const magnitude = clamped / dynamicRadius;
+    inputRef.current.analogX = nx * magnitude;
+    inputRef.current.analogY = ny * magnitude;
   };
 
   const resetJoystick = () => {
     joystickPointerId.current = null;
     joystickTouching.current = false;
-    inputRef.current.moveX = 0;
-    inputRef.current.moveY = 0;
+    inputRef.current.analogX = 0;
+    inputRef.current.analogY = 0;
     setThumb({ x: 0, y: 0 });
   };
 
   useEffect(() => {
-    const down = (e: KeyboardEvent) => { if (['w', 'ArrowUp'].includes(e.key)) inputRef.current.up = true; if (['s', 'ArrowDown'].includes(e.key)) inputRef.current.down = true; if (['a', 'ArrowLeft'].includes(e.key)) inputRef.current.left = true; if (['d', 'ArrowRight'].includes(e.key)) inputRef.current.right = true; if (e.key === ' ') inputRef.current.attack = true; if (e.key.toLowerCase() === 'e') inputRef.current.skill = true; };
-    const up = (e: KeyboardEvent) => { if (['w', 'ArrowUp'].includes(e.key)) inputRef.current.up = false; if (['s', 'ArrowDown'].includes(e.key)) inputRef.current.down = false; if (['a', 'ArrowLeft'].includes(e.key)) inputRef.current.left = false; if (['d', 'ArrowRight'].includes(e.key)) inputRef.current.right = false; if (e.key === ' ') inputRef.current.attack = false; if (e.key.toLowerCase() === 'e') inputRef.current.skill = false; };
+    const down = (e: KeyboardEvent) => { if (['w', 'ArrowUp'].includes(e.key)) inputRef.current.up = true; if (['s', 'ArrowDown'].includes(e.key)) inputRef.current.down = true; if (['a', 'ArrowLeft'].includes(e.key)) inputRef.current.left = true; if (['d', 'ArrowRight'].includes(e.key)) inputRef.current.right = true; if (e.key === ' ') inputRef.current.attackPressed = true; if (e.key.toLowerCase() === 'e') inputRef.current.skillPressed = true; };
+    const up = (e: KeyboardEvent) => { if (['w', 'ArrowUp'].includes(e.key)) inputRef.current.up = false; if (['s', 'ArrowDown'].includes(e.key)) inputRef.current.down = false; if (['a', 'ArrowLeft'].includes(e.key)) inputRef.current.left = false; if (['d', 'ArrowRight'].includes(e.key)) inputRef.current.right = false; if (e.key === ' ') inputRef.current.attackPressed = false; if (e.key.toLowerCase() === 'e') inputRef.current.skillPressed = false; };
     window.addEventListener('keydown', down); window.addEventListener('keyup', up);
     const state = mkState(character); let raf = 0, last = performance.now();
     const loop = (now: number) => { const dt = Math.min((now - last) / 1000, 0.033); last = now; state.time += dt; state.elapsed += dt; tick(state, inputRef.current, dt, () => setShake(4)); draw(state, cv.current!, shake); const p = state.fighters[0], def = byId(p.charId);
@@ -101,6 +103,10 @@ export function GameCanvas({ character, onResult }: { character: CharacterId; on
     };
   }, []);
 
+
+
+  const touchFromEvent = (touch: { clientX: number; clientY: number }) => updateJoystick(touch.clientX, touch.clientY);
+
   const skillCooldownActive = hud.skill > 0.01;
 
   return <div className='game-wrap gameplay-touch-lock'>
@@ -123,6 +129,23 @@ export function GameCanvas({ character, onResult }: { character: CharacterId; on
         <div
           ref={joystickRef}
           className='joystick'
+          onTouchStart={(e) => {
+            e.preventDefault();
+            joystickTouching.current = true;
+            const t = e.changedTouches[0];
+            if (t) touchFromEvent(t);
+          }}
+          onTouchMove={(e) => {
+            if (!joystickTouching.current) return;
+            e.preventDefault();
+            const t = e.changedTouches[0];
+            if (t) touchFromEvent(t);
+          }}
+          onTouchEnd={(e) => {
+            e.preventDefault();
+            resetJoystick();
+          }}
+          onTouchCancel={() => resetJoystick()}
           onPointerDown={(e) => {
             e.preventDefault();
             joystickPointerId.current = e.pointerId;
@@ -151,15 +174,15 @@ export function GameCanvas({ character, onResult }: { character: CharacterId; on
         <div className='mobile-buttons'>
           <button
             className={`touch-btn skill ${skillPressed ? 'pressed' : ''} ${skillCooldownActive ? 'disabled' : ''}`}
-            onPointerDown={(e) => { e.preventDefault(); setSkillPressed(true); inputRef.current.skill = true; }}
-            onPointerUp={(e) => { e.preventDefault(); setSkillPressed(false); inputRef.current.skill = false; }}
-            onPointerCancel={() => { setSkillPressed(false); inputRef.current.skill = false; }}
+            onPointerDown={(e) => { e.preventDefault(); setSkillPressed(true); inputRef.current.skillPressed = true; }}
+            onPointerUp={(e) => { e.preventDefault(); setSkillPressed(false); inputRef.current.skillPressed = false; }}
+            onPointerCancel={() => { setSkillPressed(false); inputRef.current.skillPressed = false; }}
           >스킬{skillCooldownActive ? ` ${hud.skill.toFixed(1)}s` : ''}</button>
           <button
             className={`touch-btn attack ${attackPressed ? 'pressed' : ''}`}
-            onPointerDown={(e) => { e.preventDefault(); setAttackPressed(true); inputRef.current.attack = true; }}
-            onPointerUp={(e) => { e.preventDefault(); setAttackPressed(false); inputRef.current.attack = false; }}
-            onPointerCancel={() => { setAttackPressed(false); inputRef.current.attack = false; }}
+            onPointerDown={(e) => { e.preventDefault(); setAttackPressed(true); inputRef.current.attackPressed = true; }}
+            onPointerUp={(e) => { e.preventDefault(); setAttackPressed(false); inputRef.current.attackPressed = false; }}
+            onPointerCancel={() => { setAttackPressed(false); inputRef.current.attackPressed = false; }}
           >공격</button>
         </div>
       </div>
@@ -168,8 +191,8 @@ export function GameCanvas({ character, onResult }: { character: CharacterId; on
 }
 const dist = (x:number,y:number,x2:number,y2:number)=>Math.hypot(x-x2,y-y2);
 function tick(s: GameState, i: InputState, dt: number, hit: ()=>void){s.safeZone.radius=Math.max(s.safeZone.minRadius,s.safeZone.radius-s.safeZone.shrinkPerSec*dt);s.safeZone.tick+=dt;if(s.safeZone.tick>1){s.safeZone.tick=0;s.fighters.filter(f=>f.alive&&dist(f.x,f.y,s.safeZone.x,s.safeZone.y)>s.safeZone.radius).forEach(f=>f.hp-=6)}
-for(let idx=0;idx<s.fighters.length;idx++){const f=s.fighters[idx];if(!f.alive)continue;const c=byId(f.charId);let dx=0,dy=0;if(f.status.stunUntil>s.time){} else if(f.isPlayer){const kx=(i.right?1:0)-(i.left?1:0);const ky=(i.down?1:0)-(i.up?1:0);dx=Math.abs(i.moveX)>0.01?i.moveX:kx;dy=Math.abs(i.moveY)>0.01?i.moveY:ky;} else {const t=chooseTarget(s,idx);if(dist(f.x,f.y,s.safeZone.x,s.safeZone.y)>s.safeZone.radius+20){dx=s.safeZone.x-f.x;dy=s.safeZone.y-f.y;} else if(t){dx=t.x-f.x;dy=t.y-f.y;if(Math.random()<0.006)useSkill(s,f);if(dist(f.x,f.y,t.x,t.y)<c.attackRange+10)attack(s,f,hit);} }
-if(i.attack&&f.isPlayer)attack(s,f,hit);if(i.skill&&f.isPlayer)useSkill(s,f);const l=Math.hypot(dx,dy)||1;let sp=c.speed;if(f.status.slowUntil>s.time)sp*=.62;if(f.status.speedUntil>s.time)sp*=1.3;f.vx=dx/l*sp;f.vy=dy/l*sp;f.x+=f.vx*dt;f.y+=f.vy*dt;obstacles.forEach(o=>{if(o.solid&&f.x>o.x-f.radius&&f.x<o.x+o.w+f.radius&&f.y>o.y-f.radius&&f.y<o.y+o.h+f.radius){f.x-=f.vx*dt;f.y-=f.vy*dt;}});if(f.hp<=0)f.alive=false;}
+for(let idx=0;idx<s.fighters.length;idx++){const f=s.fighters[idx];if(!f.alive)continue;const c=byId(f.charId);let dx=0,dy=0;if(f.status.stunUntil>s.time){} else if(f.isPlayer){const kx=(i.right?1:0)-(i.left?1:0);const ky=(i.down?1:0)-(i.up?1:0);dx=Math.abs(i.analogX)>JOYSTICK_DEADZONE?i.analogX:kx;dy=Math.abs(i.analogY)>JOYSTICK_DEADZONE?i.analogY:ky;} else {const t=chooseTarget(s,idx);if(dist(f.x,f.y,s.safeZone.x,s.safeZone.y)>s.safeZone.radius+20){dx=s.safeZone.x-f.x;dy=s.safeZone.y-f.y;} else if(t){dx=t.x-f.x;dy=t.y-f.y;if(Math.random()<0.006)useSkill(s,f);if(dist(f.x,f.y,t.x,t.y)<c.attackRange+10)attack(s,f,hit);} }
+if(i.attackPressed&&f.isPlayer)attack(s,f,hit);if(i.skillPressed&&f.isPlayer)useSkill(s,f);const l=Math.hypot(dx,dy)||1;let sp=c.speed;if(f.status.slowUntil>s.time)sp*=.62;if(f.status.speedUntil>s.time)sp*=1.3;f.vx=dx/l*sp;f.vy=dy/l*sp;f.x+=f.vx*dt;f.y+=f.vy*dt;obstacles.forEach(o=>{if(o.solid&&f.x>o.x-f.radius&&f.x<o.x+o.w+f.radius&&f.y>o.y-f.radius&&f.y<o.y+o.h+f.radius){f.x-=f.vx*dt;f.y-=f.vy*dt;}});if(f.hp<=0)f.alive=false;}
 s.effects=s.effects.filter(e=>(e.ttl-=dt)>0);const p=s.fighters[0];if(!p.alive)s.result='defeat';const alive=s.fighters.filter(f=>f.alive);if(alive.length===1&&alive[0].isPlayer)s.result='victory';}
 function chooseTarget(s:GameState,i:number){const me=s.fighters[i];return s.fighters.filter(f=>f.alive&&f.id!==me.id).sort((a,b)=>dist(me.x,me.y,a.x,a.y)-dist(me.x,me.y,b.x,b.y))[0]}
 function damage(s:GameState,t:Fighter,d:number){t.hp-=d;s.effects.push({x:t.x,y:t.y,r:18,ttl:.2,kind:'hit',ownerId:t.id});}
