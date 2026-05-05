@@ -1,0 +1,11 @@
+{
+  "name": "Mini Pilup Royale",
+  "short_name": "Pilup Royale",
+  "description": "Mini Pilup Royale mobile battle game",
+  "start_url": "/",
+  "scope": "/",
+  "display": "fullscreen",
+  "orientation": "any",
+  "background_color": "#07101f",
+  "theme_color": "#07101f"
+}
