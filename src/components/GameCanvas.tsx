@@ -11,10 +11,12 @@ export function GameCanvas({ character, onResult }: { character: CharacterId; on
   const shakeRef = useRef(0);
   const gameRef = useRef<MutableGame | null>(null);
   const [hud, setHud] = useState({ hp: 0, max: 0, alive: 8, skill: 0, t: 0, out: false, name: '', icon: '' });
+  const [debugEnabled, setDebugEnabled] = useState(false);
 
   useEffect(() => {
     resetInputState();
     const state = mkState(character);
+    setDebugEnabled(new URLSearchParams(window.location.search).get('debug') === '1');
     const local = state.fighters.find((f) => f.isPlayer);
     gameRef.current = { state, localPlayerId: local?.id ?? state.fighters[0].id, camera: { x: 0, y: 0 }, input: inputState, outsideZoneOverlayAlpha: 0, debugMove: {}, spawnDebug: {} };
 
@@ -61,6 +63,11 @@ export function GameCanvas({ character, onResult }: { character: CharacterId; on
       </div>
       <div className='top-panel'><span>생존 {hud.alive}</span><span>{hud.t.toFixed(0)}s</span>{hud.out && <span className='warn'>⚠ 안전지대 밖</span>}</div>
     </div>
+    {debugEnabled && gameRef.current && (
+      <pre style={{ position: 'absolute', left: 12, bottom: 12, background: 'rgba(0,0,0,.6)', color: '#d8f5ff', fontSize: 11, padding: 8, maxWidth: 420, maxHeight: 220, overflow: 'auto' }}>
+{JSON.stringify(gameRef.current.debugMove, null, 2)}
+      </pre>
+    )}
     <canvas ref={cv} width={WORLD.viewWidth} height={WORLD.viewHeight} />
   </div>;
 }
