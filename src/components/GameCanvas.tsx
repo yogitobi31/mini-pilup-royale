@@ -29,6 +29,7 @@ export function GameCanvas({ character, onResult }: { character: CharacterId; on
   const inputRef = useRef<InputState>({ up: false, down: false, left: false, right: false, moveX: 0, moveY: 0, attack: false, skill: false });
   const joystickRef = useRef<HTMLDivElement>(null);
   const joystickPointerId = useRef<number | null>(null);
+  const joystickTouching = useRef(false);
   const [shake, setShake] = useState(0);
   const [hud, setHud] = useState({ hp: 0, max: 0, alive: 8, skill: 0, t: 0, out: false, name: '', icon: '' });
   const [isTouchDevice, setIsTouchDevice] = useState(false);
@@ -60,6 +61,14 @@ export function GameCanvas({ character, onResult }: { character: CharacterId; on
     inputRef.current.moveY = ny * (clamped / JOYSTICK_RADIUS);
   };
 
+  const resetJoystick = () => {
+    joystickPointerId.current = null;
+    joystickTouching.current = false;
+    inputRef.current.moveX = 0;
+    inputRef.current.moveY = 0;
+    setThumb({ x: 0, y: 0 });
+  };
+
   useEffect(() => {
     const down = (e: KeyboardEvent) => { if (['w', 'ArrowUp'].includes(e.key)) inputRef.current.up = true; if (['s', 'ArrowDown'].includes(e.key)) inputRef.current.down = true; if (['a', 'ArrowLeft'].includes(e.key)) inputRef.current.left = true; if (['d', 'ArrowRight'].includes(e.key)) inputRef.current.right = true; if (e.key === ' ') inputRef.current.attack = true; if (e.key.toLowerCase() === 'e') inputRef.current.skill = true; };
     const up = (e: KeyboardEvent) => { if (['w', 'ArrowUp'].includes(e.key)) inputRef.current.up = false; if (['s', 'ArrowDown'].includes(e.key)) inputRef.current.down = false; if (['a', 'ArrowLeft'].includes(e.key)) inputRef.current.left = false; if (['d', 'ArrowRight'].includes(e.key)) inputRef.current.right = false; if (e.key === ' ') inputRef.current.attack = false; if (e.key.toLowerCase() === 'e') inputRef.current.skill = false; };
@@ -70,6 +79,27 @@ export function GameCanvas({ character, onResult }: { character: CharacterId; on
       if (state.result !== 'playing') { onResult(state.result); return; } raf = requestAnimationFrame(loop);
     }; raf = requestAnimationFrame(loop); return () => { cancelAnimationFrame(raf); window.removeEventListener('keydown', down); window.removeEventListener('keyup', up); };
   }, [character, onResult, shake]);
+
+  useEffect(() => {
+    const move = (e: PointerEvent) => {
+      if (!joystickTouching.current) return;
+      if (joystickPointerId.current !== null && e.pointerId !== joystickPointerId.current) return;
+      updateJoystick(e.clientX, e.clientY);
+    };
+    const end = (e: PointerEvent) => {
+      if (!joystickTouching.current) return;
+      if (joystickPointerId.current !== null && e.pointerId !== joystickPointerId.current) return;
+      resetJoystick();
+    };
+    window.addEventListener('pointermove', move, { passive: false });
+    window.addEventListener('pointerup', end);
+    window.addEventListener('pointercancel', end);
+    return () => {
+      window.removeEventListener('pointermove', move);
+      window.removeEventListener('pointerup', end);
+      window.removeEventListener('pointercancel', end);
+    };
+  }, []);
 
   const skillCooldownActive = hud.skill > 0.01;
 
@@ -93,10 +123,28 @@ export function GameCanvas({ character, onResult }: { character: CharacterId; on
         <div
           ref={joystickRef}
           className='joystick'
-          onPointerDown={(e) => { e.preventDefault(); joystickPointerId.current = e.pointerId; updateJoystick(e.clientX, e.clientY); }}
-          onPointerMove={(e) => { if (joystickPointerId.current !== e.pointerId) return; e.preventDefault(); updateJoystick(e.clientX, e.clientY); }}
-          onPointerUp={(e) => { if (joystickPointerId.current !== e.pointerId) return; e.preventDefault(); joystickPointerId.current = null; inputRef.current.moveX = 0; inputRef.current.moveY = 0; setThumb({ x: 0, y: 0 }); }}
-          onPointerCancel={(e) => { if (joystickPointerId.current !== e.pointerId) return; e.preventDefault(); joystickPointerId.current = null; inputRef.current.moveX = 0; inputRef.current.moveY = 0; setThumb({ x: 0, y: 0 }); }}
+          onPointerDown={(e) => {
+            e.preventDefault();
+            joystickPointerId.current = e.pointerId;
+            joystickTouching.current = true;
+            e.currentTarget.setPointerCapture(e.pointerId);
+            updateJoystick(e.clientX, e.clientY);
+          }}
+          onPointerMove={(e) => {
+            if (!joystickTouching.current || joystickPointerId.current !== e.pointerId) return;
+            e.preventDefault();
+            updateJoystick(e.clientX, e.clientY);
+          }}
+          onPointerUp={(e) => {
+            if (!joystickTouching.current || joystickPointerId.current !== e.pointerId) return;
+            e.preventDefault();
+            resetJoystick();
+          }}
+          onPointerCancel={(e) => {
+            if (!joystickTouching.current || joystickPointerId.current !== e.pointerId) return;
+            e.preventDefault();
+            resetJoystick();
+          }}
         >
           <span className='joystick-thumb' style={{ transform: `translate(${thumb.x}px, ${thumb.y}px)` }} />
         </div>
