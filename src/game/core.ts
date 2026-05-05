@@ -18,6 +18,7 @@ export function mkState(playerId: CharacterId): GameState { /* simplified from e
  const fighters:Fighter[]=[]; const available=[...points];
  for(let i=0;i<order.length;i++){const id=order[i];const d=byId(id);const chosen=available[0];const f:Fighter={id:`f${i}`,charId:id,x:chosen.x,y:chosen.y,vx:0,vy:0,radius:d.bodyRadius,hp:d.maxHp*combatConfig.globalHpMultiplier,alive:true,isPlayer:i===0,playerType:i===0?'local-human':'ai',lastAttack:-99,lastSkill:-99,lastHitAt:-99,flashUntil:0,fadeUntil:0,facing:{x:1,y:0},status:{slowUntil:0,stunUntil:0,confuseUntil:0,defenseUntil:0,shieldUntil:0,panicUntil:0,speedUntil:0}};fighters.push(f);available.splice(0,1);} return {fighters,obstacles,safeZone,projectiles:[],traps:[],devices:[],effects:[],time:0,elapsed:0,result:'playing'};
 }
+// Stability invariant: AI must target any alive opponent (not player-only).
 function pickTarget(s: GameState, actor: Fighter) {
  const alive=s.fighters.filter(p=>p.alive&&p.id!==actor.id);
  if(!alive.length) return undefined;
@@ -37,7 +38,8 @@ export function tick(g: MutableGame, dt: number, hit: () => void) { /* keep beha
  if(d>desired){dx=t.x-f.x;dy=t.y-f.y;} else if(isRanged&&d<Math.max(28,desired-10)){dx=f.x-t.x;dy=f.y-t.y;}
  if(d<c.attackRange+6) attack(g,s,f,t,hit);}
  }
- if(i.attackPressed&&f.id===g.localPlayerId) attack(g,s,f,undefined,hit); if(i.skillPressed&&f.id===g.localPlayerId) useSkill(s,f); const l=Math.hypot(dx,dy)||1; f.vx=dx/l*c.baseMoveSpeed; f.vy=dy/l*c.baseMoveSpeed; f.x=clamp(f.x+f.vx*dt,f.radius,WORLD.width-f.radius); f.y=clamp(f.y+f.vy*dt,f.radius,WORLD.height-f.radius); if(f.hp<=0&&f.alive){f.alive=false;}}
+ if(i.attackPressed&&f.id===g.localPlayerId) attack(g,s,f,undefined,hit); if(i.skillPressed&&f.id===g.localPlayerId) useSkill(s,f); // Stability invariant: baseline move speed comes from character baseMoveSpeed (shared BASE_MOVE_SPEED unless explicit status/skill modifiers).
+ const l=Math.hypot(dx,dy)||1; f.vx=dx/l*c.baseMoveSpeed; f.vy=dy/l*c.baseMoveSpeed; f.x=clamp(f.x+f.vx*dt,f.radius,WORLD.width-f.radius); f.y=clamp(f.y+f.vy*dt,f.radius,WORLD.height-f.radius); if(f.hp<=0&&f.alive){f.alive=false;}}
  g.debugMove.aiCount=s.fighters.filter(f=>f.alive&&f.id!==g.localPlayerId).length;
  g.debugMove.aliveCount=s.fighters.filter(f=>f.alive).length;
  g.debugMove.aiStates=s.fighters.filter(f=>f.alive&&f.id!==g.localPlayerId).map(f=>({id:f.id,targetId:f.targetId,state:f.targetId?'chase':'idle'}));
