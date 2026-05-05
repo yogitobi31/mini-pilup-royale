@@ -65,6 +65,7 @@ type MutableGame = {
     resetDetected: boolean;
     updateCalled: boolean;
   };
+  outsideZoneOverlayAlpha: number;
 };
 
 function mkState(playerId: CharacterId): GameState {
@@ -109,7 +110,7 @@ export function GameCanvas({ character, onResult }: { character: CharacterId; on
   const shakeRef = useRef(0);
   const gameRef = useRef<MutableGame | null>(null);
   const [hud, setHud] = useState({ hp: 0, max: 0, alive: 8, skill: 0, t: 0, out: false, name: '', icon: '' });
-  const [debug, setDebug] = useState({ gameStarted: false, activePlayerId: '', activePlayerName: '', x: 0, y: 0, dx: 0, dy: 0, pressedKeys: '', deltaTime: 0, isMoving: false, cameraX: 0, cameraY: 0, updateTick: 0, renderTick: 0, autoMoveActive: false, beforeMoveX: 0, beforeMoveY: 0, afterMoveX: 0, afterMoveY: 0, beforeRenderX: 0, beforeRenderY: 0, attemptedNextX: 0, attemptedNextY: 0, movedDeltaX: 0, movedDeltaY: 0, collisionBlocked: false, collisionObstacleId: '', lastBlockedReason: '', blockedX: false, blockedY: false, clampBlocked: false, resetDetected: false, updateCalled: false, elapsedTime:0,averageHpPercent:0,firstDeathTime:-1,dps:0,separationCount:0,maxAttackersOnTarget:0 });
+  const [debug, setDebug] = useState({ gameStarted: false, activePlayerId: '', activePlayerName: '', x: 0, y: 0, dx: 0, dy: 0, pressedKeys: '', deltaTime: 0, isMoving: false, cameraX: 0, cameraY: 0, updateTick: 0, renderTick: 0, autoMoveActive: false, beforeMoveX: 0, beforeMoveY: 0, afterMoveX: 0, afterMoveY: 0, beforeRenderX: 0, beforeRenderY: 0, attemptedNextX: 0, attemptedNextY: 0, movedDeltaX: 0, movedDeltaY: 0, collisionBlocked: false, collisionObstacleId: '', lastBlockedReason: '', blockedX: false, blockedY: false, clampBlocked: false, resetDetected: false, updateCalled: false, elapsedTime:0,averageHpPercent:0,firstDeathTime:-1,dps:0,separationCount:0,maxAttackersOnTarget:0,safeZoneRadius:0,safeZoneCenterX:0,safeZoneCenterY:0,outsideZoneOverlayAlpha:0,shrinkState:'shrinking' });
   const [isTouchDevice, setIsTouchDevice] = useState(false);
   const [attackPressed, setAttackPressed] = useState(false);
   const [skillPressed, setSkillPressed] = useState(false);
@@ -152,6 +153,7 @@ export function GameCanvas({ character, onResult }: { character: CharacterId; on
       camera: { x: 0, y: 0 },
       input: inputState,
       spawnDebug: (mkState as any).lastSpawnDebug,
+      outsideZoneOverlayAlpha: 0,
       debugMove: { beforeMoveX: 0, beforeMoveY: 0, attemptedNextX: 0, attemptedNextY: 0, afterMoveX: 0, afterMoveY: 0, beforeRenderX: 0, beforeRenderY: 0, movedDeltaX: 0, movedDeltaY: 0, collisionBlocked: false, collisionObstacleId: '', lastBlockedReason: '', blockedX: false, blockedY: false, clampBlocked: false, resetDetected: false, updateCalled: false },
     };
 
@@ -201,7 +203,7 @@ export function GameCanvas({ character, onResult }: { character: CharacterId; on
         game.input.attackPressed ? 'attack' : '',
         game.input.skillPressed ? 'skill' : '',
       ].filter(Boolean).join(',');
-      const alive=game.state.fighters.filter((f)=>f.alive); const avgHp=alive.reduce((a,f)=>a+f.hp/(byId(f.charId).maxHp*combatConfig.globalHpMultiplier),0)/(alive.length||1); setDebug({ gameStarted: true, activePlayerId: game.activePlayerId, activePlayerName: def.nameKo, x: p.x, y: p.y, dx, dy, pressedKeys, deltaTime: dt, isMoving: Math.hypot(p.vx, p.vy) > 0.01, cameraX: game.camera.x, cameraY: game.camera.y, updateTick, renderTick, autoMoveActive: game.state.elapsed < 2, elapsedTime:game.state.elapsed, averageHpPercent:avgHp*100, firstDeathTime:(game.state as any).firstDeathTime??-1, dps:(game.state as any).dps??0,separationCount:(game.state as any).separationCount??0,maxAttackersOnTarget:(game.state as any).maxAttackersOnTarget??0, ...game.debugMove });
+      const alive=game.state.fighters.filter((f)=>f.alive); const avgHp=alive.reduce((a,f)=>a+f.hp/(byId(f.charId).maxHp*combatConfig.globalHpMultiplier),0)/(alive.length||1); setDebug({ gameStarted: true, activePlayerId: game.activePlayerId, activePlayerName: def.nameKo, x: p.x, y: p.y, dx, dy, pressedKeys, deltaTime: dt, isMoving: Math.hypot(p.vx, p.vy) > 0.01, cameraX: game.camera.x, cameraY: game.camera.y, updateTick, renderTick, autoMoveActive: game.state.elapsed < 2, elapsedTime:game.state.elapsed, averageHpPercent:avgHp*100, firstDeathTime:(game.state as any).firstDeathTime??-1, dps:(game.state as any).dps??0,separationCount:(game.state as any).separationCount??0,maxAttackersOnTarget:(game.state as any).maxAttackersOnTarget??0,safeZoneRadius:game.state.safeZone.radius,safeZoneCenterX:game.state.safeZone.x,safeZoneCenterY:game.state.safeZone.y,outsideZoneOverlayAlpha:game.outsideZoneOverlayAlpha,shrinkState:game.state.safeZone.radius<=game.state.safeZone.minRadius?'minRadiusLocked':'shrinking', ...game.debugMove });
       if (game.state.result !== 'playing') { onResult(game.state.result); return; }
       raf = requestAnimationFrame(loop);
     };
@@ -254,9 +256,11 @@ export function GameCanvas({ character, onResult }: { character: CharacterId; on
       <div>lastBlockedReason: {debug.lastBlockedReason || 'none'} | blockedX: {String(debug.blockedX)} | blockedY: {String(debug.blockedY)} | clampBlocked: {String(debug.clampBlocked)} | resetDetected: {String(debug.resetDetected)}</div>
       <div>elapsed: {debug.elapsedTime.toFixed(1)}s | avgHp: {debug.averageHpPercent.toFixed(1)}% | firstDeath: {debug.firstDeathTime > 0 ? `${debug.firstDeathTime.toFixed(1)}s` : 'none'}</div>
       <div>dpsEvents: {debug.dps.toFixed(2)} | separation: {debug.separationCount} | maxAttackersOnTarget: {debug.maxAttackersOnTarget}</div>
+      <div>safeZone center: ({debug.safeZoneCenterX.toFixed(1)}, {debug.safeZoneCenterY.toFixed(1)}) | radius: {debug.safeZoneRadius.toFixed(1)}</div>
+      <div>outsideZone overlay alpha: {debug.outsideZoneOverlayAlpha.toFixed(3)} | shrinkState: {debug.shrinkState}</div>
       <div>spawn points: {gameRef.current?.spawnDebug.points.map((p) => `${p.id}(${p.x},${p.y})`).join(' | ')}</div>
       <div>activePlayer spawn point: {gameRef.current?.spawnDebug.activePlayerPointId}</div>
-      {gameRef.current?.spawnDebug.assignments.map((a) => <div key={a.fighterId}>{a.fighterId}/{a.charId} @({a.x},{a.y}) checks safe={String(a.checks.insideSafeZone)} obstacle={String(a.checks.notInsideObstacle)} distPlayers={String(a.checks.distanceFromOtherPlayers)} distObs={String(a.checks.distanceFromObstacles)} rejected={a.spawnRejectedReason ?? 'none'}</div>)}
+      {gameRef.current?.spawnDebug.assignments.map((a) => <div key={a.fighterId}>{a.fighterId}/{a.charId} @({a.x},{a.y}) checks safe={String(a.checks.insideSafeZone)} obstacle={String(a.checks.notInsideObstacle)} distPlayers={String(a.checks.distanceFromOtherPlayers)} distObs={String(a.checks.distanceFromObstacles)} insideMap={String(a.checks.insideMapBounds)} tooCloseToOthers={String(!a.checks.distanceFromOtherPlayers)} rejected={a.spawnRejectedReason ?? 'none'}</div>)}
     </div>}
     <canvas ref={cv} width={viewW} height={viewH} />
     {isTouchDevice && (
@@ -452,7 +456,33 @@ for(let gx=-Math.floor(camX%80);gx<viewW;gx+=80){ctx.strokeStyle='rgba(255,255,2
 arenaZones.forEach((z)=>{const zx=z.x-camX,zy=z.y-camY;ctx.fillStyle=z.tone;ctx.fillRect(zx,zy,z.w,z.h);ctx.strokeStyle='rgba(255,255,255,.08)';ctx.strokeRect(zx,zy,z.w,z.h);ctx.fillStyle='rgba(223,237,255,.35)';ctx.fillText(z.label,zx+10,zy+20);});
 arenaDecorations.forEach((d)=>{ctx.fillStyle=d.color;ctx.fillRect(d.x-camX,d.y-camY,d.w,d.h);});
 obstacles.forEach((o) => { const ox=o.x-camX, oy=o.y-camY; ctx.fillStyle = o.color; ctx.fillRect(ox, oy, o.w, o.h); ctx.fillStyle='rgba(255,255,255,.08)';ctx.fillRect(ox+4,oy+4,o.w-8,Math.min(10,o.h*0.25)); ctx.strokeStyle='rgba(0,0,0,.42)'; ctx.strokeRect(ox,oy,o.w,o.h); ctx.shadowColor='rgba(0,0,0,.32)';ctx.shadowBlur=8;ctx.strokeRect(ox+1,oy+1,o.w-2,o.h-2);ctx.shadowBlur=0; });
-ctx.fillStyle = 'rgba(20,30,55,.38)'; ctx.fillRect(0, 0, viewW, viewH); ctx.save(); ctx.beginPath(); ctx.arc(s.safeZone.x - camX, s.safeZone.y - camY, s.safeZone.radius, 0, Math.PI * 2); ctx.clip(); ctx.clearRect(0, 0, viewW, viewH); ctx.restore(); ctx.strokeStyle = '#7ec8ff'; ctx.shadowColor='#5bb4ff'; ctx.shadowBlur=14; ctx.lineWidth = 3; ctx.beginPath(); ctx.arc(s.safeZone.x - camX, s.safeZone.y - camY, s.safeZone.radius, 0, Math.PI * 2); ctx.stroke(); ctx.shadowBlur=0;
+const zoneX = s.safeZone.x - camX;
+const zoneY = s.safeZone.y - camY;
+const maxZoneDist = Math.max(viewW, viewH) * 1.25;
+const outsideOverlay = ctx.createRadialGradient(zoneX, zoneY, s.safeZone.radius * 0.82, zoneX, zoneY, s.safeZone.radius + maxZoneDist);
+outsideOverlay.addColorStop(0, 'rgba(14,23,38,0)');
+outsideOverlay.addColorStop(0.08, 'rgba(14,23,38,0.02)');
+outsideOverlay.addColorStop(0.23, 'rgba(16,26,45,0.08)');
+outsideOverlay.addColorStop(0.48, 'rgba(16,29,53,0.16)');
+outsideOverlay.addColorStop(1, 'rgba(11,18,33,0.24)');
+ctx.fillStyle = outsideOverlay;
+ctx.fillRect(0, 0, viewW, viewH);
+g.outsideZoneOverlayAlpha = 0.24;
+const pulse = 0.82 + Math.sin(s.time * 3.2) * 0.18;
+ctx.strokeStyle = '#8fd6ff';
+ctx.shadowColor='rgba(99,188,255,0.95)';
+ctx.shadowBlur=18 * pulse;
+ctx.lineWidth = 3.2;
+ctx.beginPath();
+ctx.arc(zoneX, zoneY, s.safeZone.radius, 0, Math.PI * 2);
+ctx.stroke();
+ctx.strokeStyle = 'rgba(185,232,255,0.5)';
+ctx.shadowBlur = 8 * pulse;
+ctx.lineWidth = 1.4;
+ctx.beginPath();
+ctx.arc(zoneX, zoneY, s.safeZone.radius + 4, 0, Math.PI * 2);
+ctx.stroke();
+ctx.shadowBlur=0;
 for (const e of s.effects as any[]) { if(e.kind==='dmg'){ctx.globalAlpha=Math.max(0,e.ttl/0.65); ctx.fillStyle=e.crit?'#ffd55c':'#ffffff'; ctx.font=e.crit?'bold 17px Inter':'bold 14px Inter'; ctx.fillText(e.text,e.x-camX,e.y-camY); ctx.globalAlpha=1; continue;} ctx.strokeStyle = e.kind === 'hit' ? '#fff' : e.kind === 'death' ? '#ffd0c0' : '#73b8ff'; ctx.globalAlpha=Math.max(0,e.ttl); ctx.beginPath(); ctx.arc(e.x - camX, e.y - camY, e.r, 0, Math.PI * 2); ctx.stroke(); ctx.globalAlpha=1; }
 for (const f of s.fighters) { if (!f.alive) continue; const c = byId(f.charId); const hpRate=Math.max(0,f.hp/(byId(f.charId).maxHp*combatConfig.globalHpMultiplier)); if(s.time<f.flashUntil){ctx.fillStyle='rgba(255,140,140,.95)';}else{ctx.fillStyle = c.fallbackColor;} ctx.beginPath(); ctx.arc(f.x - camX, f.y - camY, f.radius, 0, Math.PI * 2); ctx.fill(); ctx.fillStyle = '#111'; ctx.fillText(idIcon[c.id], f.x - camX - 7, f.y - camY + 4); ctx.fillStyle='#dbe5ff'; ctx.fillText(c.nameKo, f.x - camX - 20, f.y - camY - f.radius - 10); ctx.fillStyle = '#1e2230'; ctx.fillRect(f.x - camX - 24, f.y - camY + f.radius + 6, 48, 6); ctx.fillStyle='#5e667d'; ctx.fillRect(f.x - camX - 24, f.y - camY + f.radius + 6, 48*Math.min(1,(f as any).trailHpRate??hpRate),6); (f as any).trailHpRate=((f as any).trailHpRate??hpRate)+(hpRate-((f as any).trailHpRate??hpRate))*0.15; ctx.fillStyle = hpRate<0.3?'#ff5d5d':'#59de72'; ctx.fillRect(f.x - camX - 24, f.y - camY + f.radius + 6, 48 * hpRate, 6); }
 ctx.beginPath(); ctx.strokeStyle = '#ffcf5e'; ctx.lineWidth = 2; ctx.arc(p.x - camX, p.y - camY, p.radius+4, 0, Math.PI * 2); ctx.stroke(); const debugMode = typeof window !== 'undefined' && new URLSearchParams(window.location.search).get('debug') === '1'; if (debugMode) {ctx.strokeStyle='rgba(255,80,80,.75)';ctx.lineWidth=2;obstacles.filter(o=>o.solid).forEach((o)=>ctx.strokeRect(o.x-camX,o.y-camY,o.w,o.h));ctx.strokeStyle='rgba(80,220,255,.85)';ctx.beginPath();ctx.arc(p.x-camX,p.y-camY,p.radius,0,Math.PI*2);ctx.stroke();} }
