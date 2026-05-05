@@ -4,8 +4,7 @@ import { byId, CHARACTERS } from '@/game/characters';
 import { CharacterId, Fighter, GameState, InputState, Obstacle } from '@/game/types';
 
 const W = 2400, H = 1600, viewW = 1000, viewH = 620;
-const JOYSTICK_RADIUS = 54;
-const THUMB_RADIUS = 24;
+const JOYSTICK_RADIUS = 46;
 const obstacles: Obstacle[] = [
   { x: 980, y: 620, w: 460, h: 300, label: '운동장 중앙', color: '#caedc6', solid: false },
   { x: 200, y: 160, w: 300, h: 170, label: '교실 코너', color: '#dce9ff', solid: true },
@@ -74,9 +73,21 @@ export function GameCanvas({ character, onResult }: { character: CharacterId; on
 
   const skillCooldownActive = hud.skill > 0.01;
 
-  return <div className='game-wrap gameplay-touch-lock'><canvas ref={cv} width={viewW} height={viewH} />
-    <div className='hud-main'><div className='player-panel'>{hud.icon} <b>{hud.name}</b> <span>HP {hud.hp.toFixed(0)}/{hud.max}</span><div className='hpbar'><i style={{ width: `${(hud.hp / hud.max) * 100}%` }} /></div><small>기본공격 SPACE | 스킬 E ({hud.skill.toFixed(1)}s)</small></div>
-    <div className='top-panel'><b>미니필업 운동장</b><span>생존 {hud.alive}</span><span>{hud.t.toFixed(0)}s</span>{hud.out && <span className='warn'>⚠ 안전지대 밖</span>}</div></div>
+  return <div className='game-wrap gameplay-touch-lock'>
+    <div className={`hud-main ${isTouchDevice ? 'mobile-hud' : ''}`}>
+      <div className='player-panel'>
+        <div className='player-row'>{hud.icon} <b>{hud.name}</b> <span>HP {hud.hp.toFixed(0)}/{hud.max}</span></div>
+        <div className='hpbar'><i style={{ width: `${(hud.hp / hud.max) * 100}%` }} /></div>
+        {!isTouchDevice && <small>기본공격 SPACE | 스킬 E ({hud.skill.toFixed(1)}s)</small>}
+      </div>
+      <div className='top-panel'>
+        <span>생존 {hud.alive}</span>
+        <span>{hud.t.toFixed(0)}s</span>
+        {hud.out && <span className='warn'>⚠ 안전지대 밖</span>}
+      </div>
+      {isTouchDevice && <button className='mobile-menu-btn' aria-label='메뉴'>☰</button>}
+    </div>
+    <canvas ref={cv} width={viewW} height={viewH} />
     {isTouchDevice && (
       <div className='mobile-controls'>
         <div
@@ -95,7 +106,7 @@ export function GameCanvas({ character, onResult }: { character: CharacterId; on
             onPointerDown={(e) => { e.preventDefault(); setSkillPressed(true); inputRef.current.skill = true; }}
             onPointerUp={(e) => { e.preventDefault(); setSkillPressed(false); inputRef.current.skill = false; }}
             onPointerCancel={() => { setSkillPressed(false); inputRef.current.skill = false; }}
-          >스킬{skillCooldownActive ? ` ${hud.skill.toFixed(1)}` : ''}</button>
+          >스킬{skillCooldownActive ? ` ${hud.skill.toFixed(1)}s` : ''}</button>
           <button
             className={`touch-btn attack ${attackPressed ? 'pressed' : ''}`}
             onPointerDown={(e) => { e.preventDefault(); setAttackPressed(true); inputRef.current.attack = true; }}
