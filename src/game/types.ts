@@ -7,5 +7,5 @@ export interface Projectile {x:number;y:number;vx:number;vy:number;r:number;owne
 export interface Trap {x:number;y:number;r:number;ownerId:string;ttl:number;}
 export interface Device {x:number;y:number;r:number;ownerId:string;kind:'spring'|'slow'|'snack'|'drone';ttl:number;}
 export interface SkillEffect {x:number;y:number;r:number;ttl:number;kind:string;ownerId:string;}
-export interface InputState {up:boolean;down:boolean;left:boolean;right:boolean;attack:boolean;skill:boolean;}
+export interface InputState {up:boolean;down:boolean;left:boolean;right:boolean;moveX:number;moveY:number;attack:boolean;skill:boolean;}
 export interface GameState {fighters:Fighter[];obstacles:Obstacle[];safeZone:SafeZone;projectiles:Projectile[];traps:Trap[];devices:Device[];effects:SkillEffect[];time:number;elapsed:number;result:'playing'|'victory'|'defeat';}
