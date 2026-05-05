@@ -5,15 +5,22 @@ import { inputState, resetInputState, setActionPressed, setJoystickAnalog, setKe
 import { CharacterId, Fighter, GameState, InputState, Obstacle } from '@/game/types';
 
 const W = 2400, H = 1600, viewW = 1000, viewH = 620;
+const MAX_FLOATING_TEXT = 42;
 const obstacles: Obstacle[] = [
-  { x: 980, y: 620, w: 460, h: 300, label: '운동장 중앙', color: '#caedc6', solid: false },
-  { x: 200, y: 160, w: 300, h: 170, label: '교실 코너', color: '#dce9ff', solid: true },
-  { x: 360, y: 350, w: 90, h: 42, label: '책상', color: '#b99d7f', solid: true },
-  { x: 1900, y: 170, w: 250, h: 180, label: '편의점', color: '#ffe8b3', solid: true },
-  { x: 1900, y: 390, w: 110, h: 60, label: '자판기', color: '#8fc8ff', solid: true },
-  { x: 190, y: 1100, w: 320, h: 220, label: '옥수수밭', color: '#d8ef9d', solid: true },
-  { x: 1760, y: 1110, w: 340, h: 220, label: '학원 복도', color: '#e7ddff', solid: true },
-  { x: 1720, y: 1260, w: 170, h: 52, label: '벤치', color: '#8f7e65', solid: true },
+  { x: 360, y: 250, w: 300, h: 20, label: '복도 벽', color: '#38445d', solid: true },
+  { x: 360, y: 250, w: 20, h: 320, label: '복도 벽', color: '#38445d', solid: true },
+  { x: 420, y: 320, w: 120, h: 70, label: '사물함', color: '#4f5f7f', solid: true },
+  { x: 580, y: 330, w: 90, h: 50, label: '의자', color: '#8c745f', solid: true },
+  { x: 960, y: 520, w: 480, h: 320, label: '중앙 교실', color: '#25354b', solid: false },
+  { x: 1020, y: 560, w: 80, h: 42, label: '책상', color: '#7f6952', solid: true },
+  { x: 1140, y: 560, w: 80, h: 42, label: '책상', color: '#7f6952', solid: true },
+  { x: 1260, y: 560, w: 80, h: 42, label: '책상', color: '#7f6952', solid: true },
+  { x: 1700, y: 280, w: 280, h: 180, label: '휴게 구역', color: '#2d3f52', solid: false },
+  { x: 1780, y: 340, w: 92, h: 52, label: '벤치', color: '#8c745f', solid: true },
+  { x: 1700, y: 1060, w: 280, h: 260, label: '학원 복도', color: '#2d3a4f', solid: false },
+  { x: 1780, y: 1140, w: 120, h: 54, label: '칠판', color: '#31503d', solid: true },
+  { x: 760, y: 1120, w: 120, h: 120, label: '기둥', color: '#4a5566', solid: true },
+  { x: 1260, y: 1120, w: 140, h: 90, label: '책상', color: '#7f6952', solid: true },
 ];
 const idIcon: Record<CharacterId, string> = { juwon: '🔔', kyungmin: '🎵', hyunjun: '❓', chanyoung: '🙂', hyowon: '🪤', dongha: '⚙️', heesun: '✏️', soeun: '🐞' };
 
@@ -270,7 +277,7 @@ export function GameCanvas({ character, onResult }: { character: CharacterId; on
 }
 
 const dist = (x: number, y: number, x2: number, y2: number) => Math.hypot(x - x2, y - y2);
-const combatConfig={globalDamageMultiplier:0.75,globalHpMultiplier:1.18,aiAttackAggression:0.78,startingGraceSeconds:1.8,maxMeleeAttackersPerTarget:2,separationStrength:0.55,knockbackStrength:7.5,spawnMinDistance:210};
+const combatConfig={globalDamageMultiplier:0.75,globalHpMultiplier:1.18,aiAttackAggression:0.78,startingGraceSeconds:1.8,maxMeleeAttackersPerTarget:2,separationStrength:0.55,knockbackStrength:7.5,spawnMinDistance:210,hitFlashDuration:0.15,basicKnockback:8.5,skillKnockback:13};
 const clamp = (v: number, min: number, max: number) => Math.max(min, Math.min(max, v));
 const getActivePlayer = (g: MutableGame) => g.state.fighters.find((f) => f.id === g.activePlayerId) ?? g.state.fighters[0];
 
@@ -351,7 +358,7 @@ function tick(g: MutableGame, dt: number, hit: () => void) {
       g.debugMove.clampBlocked = clampBlocked;
       g.debugMove.resetDetected = false;
     }
-    if (f.hp <= 0) f.alive = false;
+    if (f.hp <= 0 && f.alive) { f.alive = false; f.fadeUntil=s.time+0.35; s.effects.push({x:f.x,y:f.y,r:24,ttl:0.35,kind:'death',ownerId:f.id}); }
   }
 
   let separationCount=0;
@@ -359,7 +366,7 @@ function tick(g: MutableGame, dt: number, hit: () => void) {
   (s as any).separationCount=separationCount;
   const attackersCount=new Map<string,number>(); s.fighters.forEach(f=>{if(f.alive&&f.targetId){attackersCount.set(f.targetId,(attackersCount.get(f.targetId)||0)+1);}}); (s as any).maxAttackersOnTarget=Math.max(0,...attackersCount.values());
   const dead=s.fighters.find(f=>!f.alive); if(dead && (s as any).firstDeathTime===undefined){(s as any).firstDeathTime=s.elapsed;}
-  s.effects = s.effects.filter((e) => (e.ttl -= dt) > 0);
+  s.effects = s.effects.filter((e:any) => { e.ttl -= dt; if(e.kind==='dmg'){e.y += (e.vy||-14)*dt;} return e.ttl>0; });
   const p = getActivePlayer(g);
   g.debugMove.resetDetected = Math.abs(g.debugMove.beforeRenderX - g.debugMove.afterMoveX) > 0.01 || Math.abs(g.debugMove.beforeRenderY - g.debugMove.afterMoveY) > 0.01;
   if (!p.alive) s.result = 'defeat';
@@ -381,16 +388,20 @@ function chooseTarget(s: GameState, i: number) {
 function damage(s: GameState, t: Fighter, d: number, src?: Fighter) {
   const now=s.time;
   const reduced=now<t.lastHitAt+0.25?0.65:1;
-  t.lastHitAt=now; t.flashUntil=now+0.08;
-  t.hp -= d*combatConfig.globalDamageMultiplier*reduced;
+  t.lastHitAt=now; t.flashUntil=now+combatConfig.hitFlashDuration;
+  const finalDamage=d*combatConfig.globalDamageMultiplier*reduced;
+  t.hp -= finalDamage;
   s.effects.push({ x: t.x, y: t.y, r: 14, ttl: .22, kind: 'hit', ownerId: t.id });
-  if(src){const dx=t.x-src.x,dy=t.y-src.y,l=Math.hypot(dx,dy)||1; t.x=clamp(t.x+dx/l*combatConfig.knockbackStrength,t.radius,W-t.radius); t.y=clamp(t.y+dy/l*combatConfig.knockbackStrength,t.radius,H-t.radius);} 
+  (s.effects as any).push({x:t.x+(Math.random()-0.5)*18,y:t.y-12,r:0,ttl:0.65,kind:'dmg',ownerId:t.id,text:`${Math.round(finalDamage)}`,crit:finalDamage>20,vy:-18});
+  if((s.effects as any).length>MAX_FLOATING_TEXT){(s.effects as any).splice(0,(s.effects as any).length-MAX_FLOATING_TEXT);}
+  if(src){const dx=t.x-src.x,dy=t.y-src.y,l=Math.hypot(dx,dy)||1; const kb=(d>byId(src.charId).attackPower*1.15?combatConfig.skillKnockback:combatConfig.basicKnockback); t.x=clamp(t.x+dx/l*kb,t.radius,W-t.radius); t.y=clamp(t.y+dy/l*kb,t.radius,H-t.radius);} 
 }
 function attack(s: GameState, f: Fighter, hit: () => void) { const c = byId(f.charId); if (s.time < combatConfig.startingGraceSeconds || s.time - f.lastAttack < c.attackCooldown) return; const attackers=s.fighters.filter(x=>x.alive&&x.id!==f.id&&x.targetId===f.targetId&&dist(x.x,x.y,f.x,f.y)<byId(x.charId).attackRange+8).length; if(c.attackRange<60 && attackers>combatConfig.maxMeleeAttackersPerTarget) return; f.lastAttack = s.time; s.effects.push({ x: f.x, y: f.y, r: c.attackRange, ttl: .12, kind: 'attack', ownerId: f.id }); s.fighters.forEach((t) => { if (t.alive && t.id !== f.id && dist(f.x, f.y, t.x, t.y) < c.attackRange + t.radius) { damage(s, t, c.attackPower, f); hit(); } }); }
 function useSkill(s: GameState, f: Fighter) { const c = byId(f.charId); if (s.time < combatConfig.startingGraceSeconds || s.time - f.lastSkill < c.skillCooldown) return; f.lastSkill = s.time; const near = s.fighters.filter((t) => t.alive && t.id !== f.id && dist(f.x, f.y, t.x, t.y) < 190); const k = c.id; s.effects.push({ x: f.x, y: f.y, r: 110, ttl: 1.1, kind: k, ownerId: f.id }); if (k === 'juwon') { near.forEach((t) => t.status.slowUntil = s.time + 2.5); f.status.shieldUntil=s.time+1.8; } if (k === 'kyungmin') { near.forEach((t) => damage(s, t, c.skillPower, f)); } if (k === 'hyunjun') { near.forEach((t) => t.status.confuseUntil = s.time + 2.2); } if (k === 'chanyoung') { f.hp = Math.min(byId(f.charId).maxHp*combatConfig.globalHpMultiplier, f.hp + c.skillPower); } if (k === 'hyowon') { near.forEach((t) => { damage(s, t, c.skillPower*0.8, f); t.status.stunUntil = s.time + 0.45; }); } if (k === 'dongha') { near.forEach((t) => t.status.slowUntil = s.time + 1.6); } if (k === 'heesun') { const t = near.sort((a,b)=>dist(f.x,f.y,a.x,a.y)-dist(f.x,f.y,b.x,b.y))[0]; if (t) damage(s, t, c.skillPower, f); } if (k === 'soeun') { near.forEach((t) => { damage(s, t, c.skillPower*0.7, f); t.status.panicUntil = s.time + 2; }); } }
-function draw(g: MutableGame, can: HTMLCanvasElement, shake: number) { const ctx = can.getContext('2d')!; const s = g.state; const p = getActivePlayer(g); g.camera.x = clamp(p.x - viewW / 2, 0, W - viewW); g.camera.y = clamp(p.y - viewH / 2, 0, H - viewH); const camX = g.camera.x + Math.random() * shake - shake / 2; const camY = g.camera.y + Math.random() * shake - shake / 2; ctx.clearRect(0, 0, viewW, viewH); ctx.fillStyle = '#96d4a6'; ctx.fillRect(0, 0, viewW, viewH);
-obstacles.forEach((o) => { ctx.fillStyle = o.color; ctx.fillRect(o.x - camX, o.y - camY, o.w, o.h); ctx.fillStyle = '#263'; ctx.fillText(o.label, o.x - camX + 8, o.y - camY + 18); }); ctx.strokeStyle = '#fff'; ctx.lineWidth = 2; ctx.strokeRect(980 - camX, 620 - camY, 460, 300); ctx.fillStyle = '#2c8a48'; ctx.fillText('PILUP', 1180 - camX, 780 - camY);
-ctx.fillStyle = 'rgba(130,20,50,.15)'; ctx.fillRect(0, 0, viewW, viewH); ctx.save(); ctx.beginPath(); ctx.arc(s.safeZone.x - camX, s.safeZone.y - camY, s.safeZone.radius, 0, Math.PI * 2); ctx.clip(); ctx.clearRect(0, 0, viewW, viewH); ctx.restore(); ctx.strokeStyle = '#ff5370'; ctx.lineWidth = 3; ctx.beginPath(); ctx.arc(s.safeZone.x - camX, s.safeZone.y - camY, s.safeZone.radius, 0, Math.PI * 2); ctx.stroke();
-for (const e of s.effects) { ctx.strokeStyle = e.kind === 'hit' ? '#fff' : e.kind === 'hyowon' ? '#ff7b22' : e.kind === 'juwon' ? '#4f8fff' : e.kind === 'soeun' ? '#f0e742' : '#333'; ctx.beginPath(); ctx.arc(e.x - camX, e.y - camY, e.r, 0, Math.PI * 2); ctx.stroke(); }
-ctx.beginPath(); ctx.strokeStyle = '#ff4040'; ctx.lineWidth = 3; ctx.arc(p.x - camX, p.y - camY, 12, 0, Math.PI * 2); ctx.stroke();
-for (const f of s.fighters) { if (!f.alive) continue; const c = byId(f.charId); ctx.fillStyle = c.fallbackColor; ctx.beginPath(); ctx.arc(f.x - camX, f.y - camY, f.radius, 0, Math.PI * 2); ctx.fill(); ctx.fillStyle = '#111'; ctx.fillText(idIcon[c.id], f.x - camX - 7, f.y - camY + 4); ctx.fillText(c.nameKo, f.x - camX - 20, f.y - camY - f.radius - 8); ctx.fillStyle = '#333'; ctx.fillRect(f.x - camX - 22, f.y - camY + f.radius + 5, 44, 5); ctx.fillStyle = '#58d866'; ctx.fillRect(f.x - camX - 22, f.y - camY + f.radius + 5, 44 * (f.hp / byId(f.charId).maxHp), 5); } }
+function draw(g: MutableGame, can: HTMLCanvasElement, shake: number) { const ctx = can.getContext('2d')!; const s = g.state; const p = getActivePlayer(g); const targetCamX = clamp(p.x - viewW / 2, 0, W - viewW); const targetCamY = clamp(p.y - viewH / 2, 0, H - viewH); g.camera.x += (targetCamX-g.camera.x)*0.14; g.camera.y += (targetCamY-g.camera.y)*0.14; const camX = g.camera.x + Math.random() * shake - shake / 2; const camY = g.camera.y + Math.random() * shake - shake / 2; ctx.clearRect(0, 0, viewW, viewH); const grad=ctx.createLinearGradient(0,0,0,viewH); grad.addColorStop(0,'#1a2436'); grad.addColorStop(1,'#141c2d'); ctx.fillStyle = grad; ctx.fillRect(0,0,viewW,viewH);
+for(let gx=-Math.floor(camX%80);gx<viewW;gx+=80){ctx.strokeStyle='rgba(255,255,255,.04)';ctx.beginPath();ctx.moveTo(gx,0);ctx.lineTo(gx,viewH);ctx.stroke();}
+obstacles.forEach((o) => { const ox=o.x-camX, oy=o.y-camY; ctx.fillStyle = o.color; ctx.fillRect(ox, oy, o.w, o.h); ctx.strokeStyle='rgba(0,0,0,.35)'; ctx.strokeRect(ox,oy,o.w,o.h); if(!o.solid){ctx.fillStyle='rgba(255,255,255,.07)';ctx.fillText(o.label,ox+8,oy+18);} });
+ctx.fillStyle = 'rgba(20,30,55,.38)'; ctx.fillRect(0, 0, viewW, viewH); ctx.save(); ctx.beginPath(); ctx.arc(s.safeZone.x - camX, s.safeZone.y - camY, s.safeZone.radius, 0, Math.PI * 2); ctx.clip(); ctx.clearRect(0, 0, viewW, viewH); ctx.restore(); ctx.strokeStyle = '#7ec8ff'; ctx.shadowColor='#5bb4ff'; ctx.shadowBlur=14; ctx.lineWidth = 3; ctx.beginPath(); ctx.arc(s.safeZone.x - camX, s.safeZone.y - camY, s.safeZone.radius, 0, Math.PI * 2); ctx.stroke(); ctx.shadowBlur=0;
+for (const e of s.effects as any[]) { if(e.kind==='dmg'){ctx.globalAlpha=Math.max(0,e.ttl/0.65); ctx.fillStyle=e.crit?'#ffd55c':'#ffffff'; ctx.font=e.crit?'bold 17px Inter':'bold 14px Inter'; ctx.fillText(e.text,e.x-camX,e.y-camY); ctx.globalAlpha=1; continue;} ctx.strokeStyle = e.kind === 'hit' ? '#fff' : e.kind === 'death' ? '#ffd0c0' : '#73b8ff'; ctx.globalAlpha=Math.max(0,e.ttl); ctx.beginPath(); ctx.arc(e.x - camX, e.y - camY, e.r, 0, Math.PI * 2); ctx.stroke(); ctx.globalAlpha=1; }
+for (const f of s.fighters) { if (!f.alive) continue; const c = byId(f.charId); const hpRate=Math.max(0,f.hp/(byId(f.charId).maxHp*combatConfig.globalHpMultiplier)); if(s.time<f.flashUntil){ctx.fillStyle='rgba(255,140,140,.95)';}else{ctx.fillStyle = c.fallbackColor;} ctx.beginPath(); ctx.arc(f.x - camX, f.y - camY, f.radius, 0, Math.PI * 2); ctx.fill(); ctx.fillStyle = '#111'; ctx.fillText(idIcon[c.id], f.x - camX - 7, f.y - camY + 4); ctx.fillStyle='#dbe5ff'; ctx.fillText(c.nameKo, f.x - camX - 20, f.y - camY - f.radius - 10); ctx.fillStyle = '#1e2230'; ctx.fillRect(f.x - camX - 24, f.y - camY + f.radius + 6, 48, 6); ctx.fillStyle='#5e667d'; ctx.fillRect(f.x - camX - 24, f.y - camY + f.radius + 6, 48*Math.min(1,(f as any).trailHpRate??hpRate),6); (f as any).trailHpRate=((f as any).trailHpRate??hpRate)+(hpRate-((f as any).trailHpRate??hpRate))*0.15; ctx.fillStyle = hpRate<0.3?'#ff5d5d':'#59de72'; ctx.fillRect(f.x - camX - 24, f.y - camY + f.radius + 6, 48 * hpRate, 6); }
+ctx.beginPath(); ctx.strokeStyle = '#ffcf5e'; ctx.lineWidth = 2; ctx.arc(p.x - camX, p.y - camY, p.radius+4, 0, Math.PI * 2); ctx.stroke(); }
