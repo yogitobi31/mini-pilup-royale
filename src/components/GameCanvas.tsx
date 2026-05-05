@@ -7,29 +7,35 @@ import { CharacterId, Fighter, GameState, InputState, Obstacle } from '@/game/ty
 const W = 2400, H = 1600, viewW = 1000, viewH = 620;
 const MAX_FLOATING_TEXT = 42;
 type ArenaZone = { id: string; x: number; y: number; w: number; h: number; label: string; tone: string };
-type ArenaObstacle = Obstacle & { id: string; type: 'wall' | 'desk' | 'locker' | 'pillar' | 'bench' | 'board' };
+type ArenaObstacle = Obstacle & { id: string; type: 'wall' | 'desk' | 'locker' | 'pillar' | 'bench' | 'board' | 'chairCluster' | 'teacherDesk' | 'bookshelf' | 'partition'; blocks: boolean };
 const arenaZones: ArenaZone[] = [
   { id: 'hallway-north', x: 260, y: 160, w: 1880, h: 280, label: '북측 복도', tone: '#273956' },
   { id: 'classroom-center', x: 860, y: 470, w: 680, h: 470, label: '중앙 교실', tone: '#1f3046' },
   { id: 'hallway-south', x: 220, y: 1030, w: 1960, h: 360, label: '남측 복도', tone: '#293850' },
   { id: 'safe-core', x: 980, y: 600, w: 380, h: 220, label: '안전지대 코어', tone: '#244661' },
 ];
-const arenaDecorations = [
-  { x: 300, y: 300, w: 1800, h: 4, color: 'rgba(180,209,255,0.08)' },
-  { x: 300, y: 1120, w: 1800, h: 4, color: 'rgba(180,209,255,0.08)' },
-  { x: 1050, y: 560, w: 300, h: 2, color: 'rgba(255,255,255,0.11)' },
+const arenaDecorations: { id: string; x: number; y: number; w: number; h: number; color: string; label?: string }[] = [
+  { id:'tile-north', x: 300, y: 300, w: 1800, h: 4, color: 'rgba(180,209,255,0.08)' },
+  { id:'tile-south', x: 300, y: 1120, w: 1800, h: 4, color: 'rgba(180,209,255,0.08)' },
+  { id:'safe-core-mark', x: 1050, y: 560, w: 300, h: 2, color: 'rgba(255,255,255,0.11)' },
+  { id:'poster-east', x: 1930, y: 520, w: 80, h: 30, color: 'rgba(255,245,200,0.22)', label:'POSTER' },
+  { id:'mat-lounge', x: 520, y: 1240, w: 200, h: 60, color: 'rgba(105,145,188,0.18)', label:'LOUNGE' },
 ];
 const obstacles: ArenaObstacle[] = [
-  { id: 'wall-north', x: 330, y: 240, w: 520, h: 30, label: '복도 벽', color: '#3f4f68', solid: true, type: 'wall' },
-  { id: 'wall-west', x: 330, y: 240, w: 30, h: 350, label: '복도 벽', color: '#3f4f68', solid: true, type: 'wall' },
-  { id: 'locker-a', x: 430, y: 325, w: 130, h: 72, label: '사물함', color: '#576a88', solid: true, type: 'locker' },
-  { id: 'desk-a', x: 1030, y: 575, w: 95, h: 48, label: '책상', color: '#8a7056', solid: true, type: 'desk' },
-  { id: 'desk-b', x: 1165, y: 575, w: 95, h: 48, label: '책상', color: '#8a7056', solid: true, type: 'desk' },
-  { id: 'desk-c', x: 1300, y: 575, w: 95, h: 48, label: '책상', color: '#8a7056', solid: true, type: 'desk' },
-  { id: 'bench-a', x: 1770, y: 350, w: 112, h: 56, label: '벤치', color: '#856a54', solid: true, type: 'bench' },
-  { id: 'board-a', x: 1760, y: 1145, w: 132, h: 58, label: '칠판', color: '#2e5a43', solid: true, type: 'board' },
-  { id: 'pillar-a', x: 760, y: 1115, w: 124, h: 124, label: '기둥', color: '#4e5a6c', solid: true, type: 'pillar' },
-  { id: 'desk-d', x: 1260, y: 1110, w: 150, h: 98, label: '책상', color: '#8a7056', solid: true, type: 'desk' },
+  { id: 'wall-north', x: 330, y: 240, w: 520, h: 30, label: '복도 벽', color: '#3f4f68', solid: true, type: 'wall', blocks: true },
+  { id: 'wall-west', x: 330, y: 240, w: 30, h: 350, label: '복도 벽', color: '#3f4f68', solid: true, type: 'wall', blocks: true },
+  { id: 'locker-a', x: 430, y: 325, w: 130, h: 72, label: '사물함', color: '#576a88', solid: true, type: 'locker', blocks: true },
+  { id: 'desk-a', x: 1030, y: 575, w: 95, h: 48, label: '책상', color: '#8a7056', solid: true, type: 'desk', blocks: true },
+  { id: 'desk-b', x: 1165, y: 575, w: 95, h: 48, label: '책상', color: '#8a7056', solid: true, type: 'desk', blocks: true },
+  { id: 'desk-c', x: 1300, y: 575, w: 95, h: 48, label: '책상', color: '#8a7056', solid: true, type: 'desk', blocks: true },
+  { id: 'bench-a', x: 1770, y: 350, w: 112, h: 56, label: '벤치', color: '#856a54', solid: true, type: 'bench', blocks: true },
+  { id: 'board-a', x: 1760, y: 1145, w: 132, h: 58, label: '칠판', color: '#2e5a43', solid: true, type: 'board', blocks: true },
+  { id: 'pillar-a', x: 760, y: 1115, w: 124, h: 124, label: '기둥', color: '#4e5a6c', solid: true, type: 'pillar', blocks: true },
+  { id: 'desk-d', x: 1260, y: 1110, w: 150, h: 98, label: '책상', color: '#8a7056', solid: true, type: 'desk', blocks: true },
+  { id: 'chairs-north', x: 1430, y: 338, w: 120, h: 56, label: '의자 묶음', color: '#6f7f92', solid: true, type: 'chairCluster', blocks: true },
+  { id: 'teacher-desk', x: 1630, y: 1140, w: 130, h: 70, label: '교탁', color: '#7a624e', solid: true, type: 'teacherDesk', blocks: true },
+  { id: 'bookshelf-east', x: 2000, y: 700, w: 120, h: 180, label: '책장', color: '#615b4f', solid: true, type: 'bookshelf', blocks: true },
+  { id: 'partition-south', x: 900, y: 1220, w: 190, h: 34, label: '파티션', color: '#556170', solid: true, type: 'partition', blocks: true },
 ];
 const idIcon: Record<CharacterId, string> = { juwon: '🔔', kyungmin: '🎵', hyunjun: '❓', chanyoung: '🙂', hyowon: '🪤', dongha: '⚙️', heesun: '✏️', soeun: '🐞' };
 
@@ -346,12 +352,18 @@ function tick(g: MutableGame, dt: number, hit: () => void) {
     } else {
       const t = chooseTarget(s, idx);
       if (dist(f.x, f.y, s.safeZone.x, s.safeZone.y) > s.safeZone.radius + 20) { dx = s.safeZone.x - f.x; dy = s.safeZone.y - f.y; }
-      else if (t) { f.targetId=t.id; const d=dist(f.x,f.y,t.x,t.y); const nx=(t.x-f.x)/(d||1), ny=(t.y-f.y)/(d||1); if (d>c.attackRange*0.95) { dx = t.x - f.x; dy = t.y - f.y; } else if (d < c.preferredCombatDistance*0.85) { dx = -nx; dy = -ny; } else { dx = -ny*0.4; dy = nx*0.4; } if (Math.random() < 0.004) useSkill(s, f); if (d < c.attackRange+6) attack(s, f, hit); }
+      else if (t) { f.targetId=t.id; const d=dist(f.x,f.y,t.x,t.y); const nx=(t.x-f.x)/(d||1), ny=(t.y-f.y)/(d||1); if (c.attackType === 'melee') {
+          if (d>c.attackRange*0.95) { dx = t.x - f.x; dy = t.y - f.y; } else if (d < c.preferredCombatDistance*0.8) { dx = -nx*0.25; dy = -ny*0.25; } else { dx = -ny*0.45; dy = nx*0.45; }
+        } else {
+          if (d > c.preferredCombatDistance*1.15) { dx = t.x - f.x; dy = t.y - f.y; }
+          else if (d < c.preferredCombatDistance*0.85) { dx = -nx; dy = -ny; }
+          else { dx = -ny*0.5; dy = nx*0.5; }
+        } if (Math.random() < 0.004) useSkill(s, f); if (d < c.attackRange+6) attack(s, f, hit); }
     }
     if (i.attackPressed && f.id === g.activePlayerId) attack(s, f, hit);
     if (i.skillPressed && f.id === g.activePlayerId) useSkill(s, f);
     const l = Math.hypot(dx, dy) || 1;
-    let sp = c.speed;
+    let sp = c.baseMoveSpeed;
     if (f.status.slowUntil > s.time) sp *= .62;
     if (f.status.speedUntil > s.time) sp *= 1.3;
     f.vx = dx / l * sp;
@@ -393,6 +405,24 @@ function tick(g: MutableGame, dt: number, hit: () => void) {
 
     f.x = clampedX;
     f.y = clampedY;
+    const intendedMove = Math.hypot(f.vx * dt, f.vy * dt);
+    const actualMove = Math.hypot(f.x - beforeMoveX, f.y - beforeMoveY);
+    if (collisionBlocked && intendedMove > 0.5 && actualMove < 0.1) {
+      (f as any).stuckTimer = ((f as any).stuckTimer ?? 0) + dt;
+      if ((f as any).stuckTimer > 0.55) {
+        const push = 6;
+        const jitterX = (Math.random() - 0.5) * push;
+        const jitterY = (Math.random() - 0.5) * push;
+        f.x = clamp(f.x + jitterX, f.radius, W - f.radius);
+        f.y = clamp(f.y + jitterY, f.radius, H - f.radius);
+        (f as any).recoveryApplied = true;
+        (f as any).nearestValidPosition = { x: f.x, y: f.y };
+        (f as any).stuckTimer = 0;
+      }
+    } else {
+      (f as any).stuckTimer = 0;
+      (f as any).recoveryApplied = false;
+    }
 
     if (f.id === g.activePlayerId) {
       g.debugMove.beforeMoveX = beforeMoveX;
@@ -444,12 +474,20 @@ function damage(s: GameState, t: Fighter, d: number, src?: Fighter) {
   t.lastHitAt=now; t.flashUntil=now+combatConfig.hitFlashDuration;
   const finalDamage=d*combatConfig.globalDamageMultiplier*reduced;
   t.hp -= finalDamage;
+  if (t.hp <= 0 && src) {
+    (src as any).killCount = ((src as any).killCount ?? 0) + 1;
+    const kills = (src as any).killCount;
+    (src as any).damageMultiplier = Math.min(1.28, 1 + kills * 0.04);
+    (src as any).level = 1 + Math.floor(kills / 2);
+    src.hp = Math.min(byId(src.charId).maxHp * combatConfig.globalHpMultiplier, src.hp + 14);
+    src.lastSkill -= Math.min(0.18, kills * 0.03);
+  }
   s.effects.push({ x: t.x, y: t.y, r: 14, ttl: .22, kind: 'hit', ownerId: t.id });
   (s.effects as any).push({x:t.x+(Math.random()-0.5)*18,y:t.y-12,r:0,ttl:0.65,kind:'dmg',ownerId:t.id,text:`${Math.round(finalDamage)}`,crit:finalDamage>20,vy:-18});
   if((s.effects as any).length>MAX_FLOATING_TEXT){(s.effects as any).splice(0,(s.effects as any).length-MAX_FLOATING_TEXT);}
   if(src){const dx=t.x-src.x,dy=t.y-src.y,l=Math.hypot(dx,dy)||1; const kb=(d>byId(src.charId).attackPower*1.15?combatConfig.skillKnockback:combatConfig.basicKnockback); t.x=clamp(t.x+dx/l*kb,t.radius,W-t.radius); t.y=clamp(t.y+dy/l*kb,t.radius,H-t.radius);} 
 }
-function attack(s: GameState, f: Fighter, hit: () => void) { const c = byId(f.charId); if (s.time < combatConfig.startingGraceSeconds || s.time - f.lastAttack < c.attackCooldown) return; const attackers=s.fighters.filter(x=>x.alive&&x.id!==f.id&&x.targetId===f.targetId&&dist(x.x,x.y,f.x,f.y)<byId(x.charId).attackRange+8).length; if(c.attackRange<60 && attackers>combatConfig.maxMeleeAttackersPerTarget) return; f.lastAttack = s.time; s.effects.push({ x: f.x, y: f.y, r: c.attackRange, ttl: .12, kind: 'attack', ownerId: f.id }); s.fighters.forEach((t) => { if (t.alive && t.id !== f.id && dist(f.x, f.y, t.x, t.y) < c.attackRange + t.radius) { damage(s, t, c.attackPower, f); hit(); } }); }
+function attack(s: GameState, f: Fighter, hit: () => void) { const c = byId(f.charId); if (s.time < combatConfig.startingGraceSeconds || s.time - f.lastAttack < c.attackCooldown) return; const attackers=s.fighters.filter(x=>x.alive&&x.id!==f.id&&x.targetId===f.targetId&&dist(x.x,x.y,f.x,f.y)<byId(x.charId).attackRange+8).length; if(c.attackType==='melee' && attackers>combatConfig.maxMeleeAttackersPerTarget) return; f.lastAttack = s.time; s.effects.push({ x: f.x, y: f.y, r: c.attackRange, ttl: .12, kind: 'attack', ownerId: f.id }); const dmg = c.attackPower * ((f as any).damageMultiplier ?? 1); s.fighters.forEach((t) => { if (t.alive && t.id !== f.id && dist(f.x, f.y, t.x, t.y) < c.attackRange + t.radius) { damage(s, t, dmg, f); hit(); } }); }
 function useSkill(s: GameState, f: Fighter) { const c = byId(f.charId); if (s.time < combatConfig.startingGraceSeconds || s.time - f.lastSkill < c.skillCooldown) return; f.lastSkill = s.time; const near = s.fighters.filter((t) => t.alive && t.id !== f.id && dist(f.x, f.y, t.x, t.y) < 190); const k = c.id; s.effects.push({ x: f.x, y: f.y, r: 110, ttl: 1.1, kind: k, ownerId: f.id }); if (k === 'juwon') { near.forEach((t) => t.status.slowUntil = s.time + 2.5); f.status.shieldUntil=s.time+1.8; } if (k === 'kyungmin') { near.forEach((t) => damage(s, t, c.skillPower, f)); } if (k === 'hyunjun') { near.forEach((t) => t.status.confuseUntil = s.time + 2.2); } if (k === 'chanyoung') { f.hp = Math.min(byId(f.charId).maxHp*combatConfig.globalHpMultiplier, f.hp + c.skillPower); } if (k === 'hyowon') { near.forEach((t) => { damage(s, t, c.skillPower*0.8, f); t.status.stunUntil = s.time + 0.45; }); } if (k === 'dongha') { near.forEach((t) => t.status.slowUntil = s.time + 1.6); } if (k === 'heesun') { const t = near.sort((a,b)=>dist(f.x,f.y,a.x,a.y)-dist(f.x,f.y,b.x,b.y))[0]; if (t) damage(s, t, c.skillPower, f); } if (k === 'soeun') { near.forEach((t) => { damage(s, t, c.skillPower*0.7, f); t.status.panicUntil = s.time + 2; }); } }
 function draw(g: MutableGame, can: HTMLCanvasElement, shake: number) { const ctx = can.getContext('2d')!; const s = g.state; const p = getActivePlayer(g); const targetCamX = clamp(p.x - viewW / 2, 0, W - viewW); const targetCamY = clamp(p.y - viewH / 2, 0, H - viewH); g.camera.x += (targetCamX-g.camera.x)*0.14; g.camera.y += (targetCamY-g.camera.y)*0.14; const camX = g.camera.x + Math.random() * shake - shake / 2; const camY = g.camera.y + Math.random() * shake - shake / 2; ctx.clearRect(0, 0, viewW, viewH); const grad=ctx.createLinearGradient(0,0,0,viewH); grad.addColorStop(0,'#1a2436'); grad.addColorStop(1,'#141c2d'); ctx.fillStyle = grad; ctx.fillRect(0,0,viewW,viewH);
 for(let gx=-Math.floor(camX%80);gx<viewW;gx+=80){ctx.strokeStyle='rgba(255,255,255,.04)';ctx.beginPath();ctx.moveTo(gx,0);ctx.lineTo(gx,viewH);ctx.stroke();}
