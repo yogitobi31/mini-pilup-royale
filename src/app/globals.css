@@ -1,6 +1,8 @@
 *{box-sizing:border-box}
-html{min-height:100%;background:#07101f;overscroll-behavior:none;overflow:hidden;touch-action:none}
-body{margin:0;min-height:100vh;font-family:Inter,Arial,sans-serif;background:linear-gradient(180deg,#dff3ff,#f7f1ff);color:#1f2a44;overscroll-behavior:none;overflow:hidden;touch-action:none;-webkit-tap-highlight-color:transparent}
+:root{--app-bg:#07101f;--app-height:100dvh}
+html,body{width:100%;height:100%;margin:0;padding:0;overflow:hidden;overscroll-behavior:none;touch-action:none;background:var(--app-bg)}
+body{font-family:Inter,Arial,sans-serif;color:#1f2a44;-webkit-tap-highlight-color:transparent}
+#root,#__next{width:100%;height:100%}
 button{font:inherit}
 .screen{min-height:100vh;min-height:100dvh;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:12px;padding:20px;text-align:center}
 .select-screen{justify-content:flex-start;padding-top:42px}.menu-title{font-size:44px;margin:0}.menu-subtitle{margin:0 0 8px;color:#4c5680;font-weight:700}
@@ -26,7 +28,7 @@ canvas{display:block;margin:0 auto;border:2px solid #7188ff;border-radius:16px;b
 @media (max-width:920px){
   html,body{background:#07101f}
   .character-grid{grid-template-columns:repeat(2,minmax(160px,1fr))}.menu-title{font-size:32px}.hud-main{flex-direction:column}
-  .game-wrap{width:100vw;height:100svh;height:100dvh;max-width:none;margin:0;overflow:hidden;background:#07101f;padding:0;padding-top:env(safe-area-inset-top)}
+  .game-wrap{width:100vw;height:100vh;height:var(--app-height);min-height:100vh;min-height:var(--app-height);max-width:none;margin:0;overflow:hidden;background:#07101f;padding:0}
   .game-wrap.gameplay-touch-lock{position:fixed;inset:0}
   .game-wrap::before{display:none}
   .mobile-hud{position:absolute;top:max(8px,env(safe-area-inset-top));left:max(8px,env(safe-area-inset-left));right:max(8px,env(safe-area-inset-right));z-index:3;display:grid;grid-template-columns:minmax(0,1fr) auto auto;gap:8px;align-items:start;margin:0;pointer-events:none}
@@ -40,6 +42,9 @@ canvas{display:block;margin:0 auto;border:2px solid #7188ff;border-radius:16px;b
   canvas{width:100vw;height:100%;max-width:none;object-fit:cover;margin:0;border:0;border-radius:0;box-shadow:none}
   .mobile-controls{padding-left:max(0px,env(safe-area-inset-left));padding-bottom:max(0px,env(safe-area-inset-bottom))}
   .mobile-dpad{left:max(16px,env(safe-area-inset-left));bottom:max(18px,env(safe-area-inset-bottom))}
+}
+@supports not (height: 100dvh) {
+  :root{--app-height:100vh}
 }
 @media (max-width:920px) and (orientation:landscape){
   .game-wrap{height:100vh;height:100dvh;padding-top:0}
@@ -56,3 +61,8 @@ canvas{display:block;margin:0 auto;border:2px solid #7188ff;border-radius:16px;b
 .debug-telemetry{position:absolute;left:10px;top:10px;z-index:6;padding:6px 9px;border-radius:8px;font-size:11px;line-height:1.35;color:#eaf2ff;background:rgba(7,13,30,.56);backdrop-filter:blur(4px);pointer-events:none;max-width:min(90vw,460px)}
 .mobile-joystick{position:absolute;left:16px;bottom:16px;width:96px;height:96px;border-radius:50%;border:1px solid rgba(255,255,255,.45);background:rgba(13,22,45,.4);pointer-events:auto;touch-action:none;display:grid;place-items:center;box-shadow:0 10px 20px rgba(0,0,0,.28)}
 .mobile-joystick-knob{width:42px;height:42px;border-radius:50%;background:rgba(145,183,255,.82);border:1px solid rgba(255,255,255,.65)}
+.orientation-overlay{position:absolute;inset:0;z-index:7;display:flex;align-items:center;justify-content:center;background:rgba(5,10,22,.74);padding:max(20px,env(safe-area-inset-top)) max(20px,env(safe-area-inset-right)) max(20px,env(safe-area-inset-bottom)) max(20px,env(safe-area-inset-left))}
+.orientation-card{max-width:320px;background:rgba(7,13,30,.9);color:#fff;border:1px solid rgba(255,255,255,.2);border-radius:14px;padding:16px;text-align:center}
+.small-btn{margin-top:10px;padding:8px 12px;border-radius:10px;border:1px solid rgba(255,255,255,.25);background:#2e5df4;color:#fff}
+.fullscreen-btn{position:absolute;z-index:5;top:max(8px,env(safe-area-inset-top));right:max(8px,env(safe-area-inset-right));padding:6px 10px;border-radius:10px;border:1px solid rgba(255,255,255,.25);background:rgba(7,13,30,.64);color:#fff;font-size:12px}
+.install-hint{position:absolute;left:max(8px,env(safe-area-inset-left));right:max(8px,env(safe-area-inset-right));bottom:max(8px,env(safe-area-inset-bottom));z-index:6;background:rgba(7,13,30,.82);color:#fff;border-radius:12px;padding:10px 12px;font-size:12px;display:flex;gap:8px;align-items:center;justify-content:space-between}

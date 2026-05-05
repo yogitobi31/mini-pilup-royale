@@ -60,11 +60,30 @@ export function GameCanvas({ character, onResult }: { character: CharacterId; on
   const joystickPointerIdRef = useRef<number | null>(null);
   const joystickCenterRef = useRef({ x: 0, y: 0 });
   const joystickInputRef = useRef({ x: 0, y: 0 });
+  const [showOrientationGuide, setShowOrientationGuide] = useState(false);
+  const [showInstallHint, setShowInstallHint] = useState(false);
+  const [fullscreenHelp, setFullscreenHelp] = useState('');
+  const showDebug = typeof window !== 'undefined' && (process.env.NODE_ENV === 'development' || new URLSearchParams(window.location.search).get('debug') === '1');
 
   useEffect(() => {
     const coarse = window.matchMedia('(pointer: coarse)').matches;
     setIsTouchDevice(coarse || navigator.maxTouchPoints > 0 || 'ontouchstart' in window);
   }, []);
+
+  useEffect(() => {
+    const dismissed = localStorage.getItem('mpr-install-hint-dismissed') === '1';
+    if (dismissed) return;
+    const mobile = window.matchMedia('(max-width: 920px)').matches;
+    if (mobile) setShowInstallHint(true);
+  }, []);
+
+  useEffect(() => {
+    const media = window.matchMedia('(orientation: portrait)');
+    const sync = () => setShowOrientationGuide(isTouchDevice && media.matches);
+    sync();
+    media.addEventListener('change', sync);
+    return () => media.removeEventListener('change', sync);
+  }, [isTouchDevice]);
 
   const setDpadMovement = (direction: 'up' | 'down' | 'left' | 'right', pressed: boolean) => {
     setKeyboardMovement(direction, pressed);
@@ -145,8 +164,17 @@ export function GameCanvas({ character, onResult }: { character: CharacterId; on
   }, [character, onResult]);
 
   const skillCooldownActive = hud.skill > 0.01;
+  const requestFullscreen = async () => {
+    try {
+      await document.documentElement.requestFullscreen();
+      setFullscreenHelp('');
+    } catch {
+      setFullscreenHelp('전체화면이 제한되면 홈 화면에 추가 후 앱처럼 실행해 보세요.');
+    }
+  };
 
   return <div className='game-wrap gameplay-touch-lock'>
+    {isTouchDevice && <button type='button' className='fullscreen-btn' onClick={requestFullscreen}>전체화면</button>}
     <div className={`hud-main ${isTouchDevice ? 'mobile-hud' : ''}`}>
       <div className='player-panel'>
         <div className='player-row'>{hud.icon} <b>{hud.name}</b> <span>HP {hud.hp.toFixed(0)}/{hud.max}</span></div>
@@ -160,7 +188,7 @@ export function GameCanvas({ character, onResult }: { character: CharacterId; on
       </div>
       {isTouchDevice && <button className='mobile-menu-btn' aria-label='메뉴'>☰</button>}
     </div>
-    <div className='debug-telemetry'>
+    {showDebug && <div className='debug-telemetry'>
       <div>gameStarted: {String(debug.gameStarted)} | activePlayerId: {debug.activePlayerId}</div>
       <div>activePlayer: {debug.activePlayerName}</div>
       <div>x: {debug.x.toFixed(1)} y: {debug.y.toFixed(1)} | camX: {debug.cameraX.toFixed(1)} camY: {debug.cameraY.toFixed(1)}</div>
@@ -170,7 +198,7 @@ export function GameCanvas({ character, onResult }: { character: CharacterId; on
       <div>beforeMove ({debug.beforeMoveX.toFixed(1)}, {debug.beforeMoveY.toFixed(1)}) → afterMove ({debug.afterMoveX.toFixed(1)}, {debug.afterMoveY.toFixed(1)})</div>
       <div>beforeRender ({debug.beforeRenderX.toFixed(1)}, {debug.beforeRenderY.toFixed(1)}) | attempted ({debug.attemptedNextX.toFixed(1)}, {debug.attemptedNextY.toFixed(1)})</div>
       <div>movedDelta ({debug.movedDeltaX.toFixed(2)}, {debug.movedDeltaY.toFixed(2)}) | collisionBlocked: {String(debug.collisionBlocked)} | clampBlocked: {String(debug.clampBlocked)} | resetDetected: {String(debug.resetDetected)}</div>
-    </div>
+    </div>}
     <canvas ref={cv} width={viewW} height={viewH} />
     {isTouchDevice && (
       <div className='mobile-controls'>
@@ -233,6 +261,9 @@ export function GameCanvas({ character, onResult }: { character: CharacterId; on
         </div>
       </div>
     )}
+    {fullscreenHelp && <div className='install-hint'><span>{fullscreenHelp}</span><button type='button' className='small-btn' onClick={() => setFullscreenHelp('')}>닫기</button></div>}
+    {showInstallHint && <div className='install-hint'><span>홈 화면에 추가하면 앱처럼 전체화면으로 플레이할 수 있어요.</span><button type='button' className='small-btn' onClick={() => { localStorage.setItem('mpr-install-hint-dismissed', '1'); setShowInstallHint(false); }}>닫기</button></div>}
+    {showOrientationGuide && <div className='orientation-overlay'><div className='orientation-card'><div>가로모드로 돌리면 더 쾌적하게 플레이할 수 있어요.</div><button type='button' className='small-btn' onClick={() => setShowOrientationGuide(false)}>계속 플레이</button></div></div>}
   </div>;
 }
 
